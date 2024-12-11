@@ -7,7 +7,6 @@ import org.example.entity.Usr;
 import org.example.repository.MovieRepository;
 import org.example.repository.UserMovieRatingRepository;
 import org.example.repository.UsrRepository;
-import org.example.service.Json.JsonProcessing;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -26,7 +25,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class CommandProcessingService {
-    private final JsonProcessing jsonProcessing;
     private final TmdbService tmdbService;
     private final MovieRepository movieRepository;
     private final UsrRepository usrRepository;
@@ -371,10 +369,6 @@ public class CommandProcessingService {
                 tmdbService.getGenreNames(bestMatch.getGenreIds()), // Вывод жанров
                 maxSimilarity * 100
         );
-    }
-
-    public String getFormattedGenres(Movie movie) {
-        return tmdbService.getGenreNames(movie.getGenreIds());
     }
 
     public String getPopularMoviesRandom() {

@@ -28,17 +28,13 @@ public class TmdbService {
         this.restTemplate = new RestTemplate();
     }
 
-    /**
-     * Получить список популярных фильмов.
-     */
+    //Получить список популярных фильмов.
     public Map<String, Object> getPopularMovies() {
         String url = String.format("%s/movie/popular?api_key=%s", apiUrl, apiKey);
         return restTemplate.getForObject(url, Map.class);
     }
 
-    /**
-     * Поиск фильма по названию.
-     */
+    //Поиск фильма по названию.
     public Map<String, Object> searchMovie(String query) {
         String url = String.format("%s/search/movie?api_key=%s&query=%s", apiUrl, apiKey, query);
         return restTemplate.getForObject(url, Map.class);
