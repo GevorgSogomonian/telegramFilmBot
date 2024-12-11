@@ -21,4 +21,5 @@ public class Movie {
     private String title; // Название фильма
     private String description; // Описание фильма
     private Double rating; // Средний рейтинг из TMDb API
+    private String genreIds; // Ids жанра
 }

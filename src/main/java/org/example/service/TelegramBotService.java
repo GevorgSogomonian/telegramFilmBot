@@ -54,6 +54,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
         commandHandlers.put("/popular", this::handlePopularCommand);
         commandHandlers.put("/random", this::handleRandomCommand);
         commandHandlers.put("/rate", this::handleRateCommand);
+        commandHandlers.put("/personal", this::handlePersonalCommand);
     }
 
     @Override
@@ -113,8 +114,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
         String chatId = update.getMessage().getChatId().toString();
 
         // Получаем случайный фильм
-//        String randomMovieResponse = commandProcessingService.getRandomMovie();
-//        Movie randomMovie = commandProcessingService.getOrCreateMovie(randomMovieResponse);
         Movie randomMovie = commandProcessingService.getOrCreateMovie();
 
         // Сохраняем фильм для дальнейшей оценки
@@ -123,6 +122,12 @@ public class TelegramBotService extends TelegramLongPollingBot {
         // Отправляем фильм пользователю
         sendResponse(chatId, "Мы предлагаем вам фильм: " + randomMovie.getTitle());
         sendResponse(chatId, "Вы уже видели этот фильм? Ответьте 'да' или 'нет'.");
+    }
+
+    private void handlePersonalCommand(Update update) {
+        String chatId = update.getMessage().getChatId().toString();
+        String result = commandProcessingService.getPersonalRecommendation(chatId);
+        sendResponse(chatId, result);
     }
 
     private void saveUserRating(String chatId, int rating) {
@@ -161,6 +166,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
         if (userResponse.equals("да")) {
             movieRepository.save(activeRatings.get(chatId));
+
             sendResponse(chatId, "Как бы вы оценили этот фильм по шкале от 1 до 10?");
         } else if (userResponse.equals("нет")) {
             sendResponse(chatId, "Спасибо! Если хотите, попробуйте другой фильм.");
@@ -182,7 +188,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     private void handleUnknownCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
-        sendSplitResponse(chatId, "Неизвестная команда. Попробуйте /search, /popular или /random.");
+        sendSplitResponse(chatId, "Неизвестная команда. Попробуйте /search, /popular, /random, /rate или /personal.");
     }
 
     private void sendSplitResponse(String chatId, String text) {
