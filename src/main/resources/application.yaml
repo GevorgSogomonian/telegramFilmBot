@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: new_user
+    password: secure_password
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+  telegram:
+    bot:
+      username: film_bot_123_bot
+      token: 7767880110:AAHA1k63T5fJwwnVFR53MU1LznncDPwOscs
+      path: false
+
+  tmdb:
+    api:
+      key: ddf19a5f2004db98f54986499f0b1607
+      url: https://api.themoviedb.org/3
