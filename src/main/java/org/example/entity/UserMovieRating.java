@@ -1,15 +1,14 @@
 package org.example.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-@Entity
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
 public class UserMovieRating {
 
     @Id
@@ -18,11 +17,12 @@ public class UserMovieRating {
 
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
-    private Usr user; // Пользователь, который оценил фильм
+    private Usr user;
 
     @ManyToOne
     @JoinColumn(name = "movie_id", nullable = false)
-    private Movie movie; // Ссылка на фильм
+    private Movie movie;
 
-    private int rating; // Рейтинг, выставленный пользователем
+    @Column(nullable = false)
+    private int rating;
 }

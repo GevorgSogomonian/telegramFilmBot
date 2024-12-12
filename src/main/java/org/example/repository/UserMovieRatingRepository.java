@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface UserMovieRatingRepository extends JpaRepository<UserMovieRating, Long> {
-    List<UserMovieRating> findByUserId(Long userId); // Поиск записей по userId
+
+    List<UserMovieRating> findByUserId(Long userId);
+
     Optional<UserMovieRating> findByUserIdAndMovieId(Long userId, Long movieId);
 }

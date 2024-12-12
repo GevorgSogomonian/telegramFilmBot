@@ -1,24 +1,18 @@
 package org.example.service;
 
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class TmdbService {
+
     @Value("${spring.tmdb.api.key}")
     private String apiKey;
 
@@ -26,143 +20,160 @@ public class TmdbService {
     private String apiUrl;
 
     private final RestTemplate restTemplate;
-
     private final Map<Integer, String> genreCache = new HashMap<>();
 
     public TmdbService() {
         this.restTemplate = new RestTemplate();
     }
 
-    //Получить список популярных фильмов.
+    /**
+     * Fetches popular movies from TMDb API.
+     *
+     * @return a map containing popular movies.
+     */
     public Map<String, Object> getPopularMovies() {
-        String url = String.format("%s/movie/popular?api_key=%s", apiUrl, apiKey);
-        return restTemplate.getForObject(url, Map.class);
+        String url = buildUrl("movie/popular", null);
+        return performApiRequest(url);
     }
 
-    //Поиск фильма по названию.
+    /**
+     * Searches for a movie by its title.
+     *
+     * @param query the movie title to search for.
+     * @return a map containing the search results.
+     */
     public Map<String, Object> searchMovie(String query) {
-        try {
-            String url = String.format("%s/search/movie?api_key=%s&query=%s", apiUrl, apiKey, query);
-            log.info("Выполняется запрос к TMDb API: {}", url);
+        String url = buildUrl("search/movie", Map.of("query", query));
+        return performApiRequestWithLogging(url, "searching for movie");
+    }
 
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            if (response != null && response.containsKey("results")) {
-                log.info("Запрос к TMDb выполнен успешно. Найдено результатов: {}",
-                        ((List<?>) response.get("results")).size());
-                return response;
-            } else {
-                log.warn("Ответ TMDb API не содержит ключ 'results'.");
+    /**
+     * Gets a random movie from TMDb.
+     *
+     * @return a map containing movie data.
+     */
+    public Map<String, Object> getRandomMovieFromAll() {
+        int randomPage = new Random().nextInt(500) + 1; // TMDb limits to 500 pages
+        Map<String, Object> response = fetchMoviesFromPage(randomPage);
+
+        if (response != null && response.containsKey("results")) {
+            List<Map<String, Object>> movies = (List<Map<String, Object>>) response.get("results");
+            if (!movies.isEmpty()) {
+                return movies.get(new Random().nextInt(movies.size()));
             }
-        } catch (Exception e) {
-            log.error("Ошибка при запросе к TMDb API для поиска фильма: {}", e.getMessage(), e);
         }
         return null;
     }
 
-    public Map<String, Object> getRandomMovieFromAll() {
-        // Выбираем случайную страницу из диапазона (TMDb ограничивает количество страниц)
-        int randomPage = new Random().nextInt(500) + 1; // Например, до 500 страниц
-        Map<String, Object> response = fetchMoviesFromAllPages(randomPage);
-
-        if (response != null && response.containsKey("results")) {
-            List<Map<String, Object>> movies = (List<Map<String, Object>>) response.get("results");
-
-            if (!movies.isEmpty()) {
-                // Возвращаем случайный фильм с данной страницы
-                return movies.get(new Random().nextInt(movies.size()));
-            }
-        }
-
-        return null; // Если ничего не найдено
-    }
-
-    private Map<String, Object> fetchMoviesFromAllPages(int page) {
-        String url = String.format("https://api.themoviedb.org/3/discover/movie?api_key=%s&page=%d", apiKey, page);
-        return performApiRequest(url);
-    }
-
-    // Выполнение HTTP-запроса к API
-    public Map<String, Object> performApiRequest(String url) {
-        try {
-            RestTemplate restTemplate = new RestTemplate();
-            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return response.getBody(); // Возвращаем тело ответа в виде карты
-            } else {
-                System.err.println("Ошибка при выполнении API-запроса: " + response.getStatusCode());
-            }
-        } catch (Exception e) {
-            System.err.println("Исключение при выполнении API-запроса: " + e.getMessage());
-        }
-
-        return null; // Возвращаем null в случае ошибки
-    }
-
-    // Получение списка жанров и кэширование
+    /**
+     * Fetches genres and caches them locally.
+     */
     public void fetchAndCacheGenres() {
-        String url = String.format("%s/genre/movie/list?api_key=%s", apiUrl, apiKey);
-        try {
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            if (response != null && response.containsKey("genres")) {
-                List<Map<String, Object>> genres = (List<Map<String, Object>>) response.get("genres");
-                genres.forEach(genre -> {
-                    genreCache.put(
-                            (Integer) genre.get("id"),
-                            (String) genre.get("name")
-                    );
-                });
-                log.info("Закэшированные жанры: {}", genreCache);
-            } else {
-                log.warn("Ответ от TMDb API не содержит ключа 'genres'.");
-            }
-        } catch (Exception e) {
-            log.error("Ошибка при получении списка жанров: {}", e.getMessage(), e);
+        String url = buildUrl("genre/movie/list", null);
+        Map<String, Object> response = performApiRequest(url);
+
+        if (response != null && response.containsKey("genres")) {
+            List<Map<String, Object>> genres = (List<Map<String, Object>>) response.get("genres");
+            genres.forEach(genre -> genreCache.put(
+                    (Integer) genre.get("id"),
+                    (String) genre.get("name")
+            ));
+            log.info("Genres cached successfully.");
+        } else {
+            log.warn("Failed to fetch genres or no genres available in the response.");
         }
     }
 
-    // Метод для расшифровки жанров
+    /**
+     * Decodes genre IDs into genre names using the cached data.
+     *
+     * @param genreIds comma-separated string of genre IDs.
+     * @return a string of genre names or "Unknown genres" if not found.
+     */
     public String getGenreNames(String genreIds) {
         if (genreIds == null || genreIds.isEmpty()) {
-            return "Жанры неизвестны";
+            return "Unknown genres";
         }
 
-        // Если кэш пустой, повторно загружаем жанры
-        if (genreCache.isEmpty()) {
-            fetchAndCacheGenres();
-        }
-
-        return Arrays.stream(genreIds.split("_"))
-                .filter(genreId -> {
-                    try {
-                        Integer.parseInt(genreId);
-                        return true;
-                    } catch (NumberFormatException e) {
-                        return false;
-                    }
-                })
-                .map(genreId -> genreCache.getOrDefault(Integer.parseInt(genreId), "Неизвестный жанр"))
+        return Arrays.stream(genreIds.split(","))
+                .map(id -> genreCache.getOrDefault(Integer.parseInt(id.trim()), "Unknown genre"))
                 .collect(Collectors.joining(", "));
     }
 
+    /**
+     * Retrieves a random popular movie from TMDb.
+     *
+     * @return a map containing random popular movie data.
+     */
     public Map<String, Object> getRandomPopularMovie() {
         Map<String, Object> response = getPopularMovies();
 
         if (response != null && response.containsKey("results")) {
             List<Map<String, Object>> movies = (List<Map<String, Object>>) response.get("results");
-
             if (!movies.isEmpty()) {
-                // Возвращаем случайный фильм из популярных
                 return movies.get(new Random().nextInt(movies.size()));
             }
         }
-
-        return null; // Если ничего не найдено
+        return null;
     }
 
-    @PostConstruct
-    public void init() {
-        fetchAndCacheGenres();
-        log.info("Жанры успешно загружены и закэшированы: {}", genreCache);
+    /**
+     * Builds a URL for the TMDb API.
+     *
+     * @param endpoint the API endpoint.
+     * @param params   additional query parameters.
+     * @return the constructed URL.
+     */
+    private String buildUrl(String endpoint, Map<String, String> params) {
+        StringBuilder urlBuilder = new StringBuilder(String.format("%s/%s?api_key=%s", apiUrl, endpoint, apiKey));
+
+        if (params != null) {
+            params.forEach((key, value) -> urlBuilder.append("&").append(key).append("=").append(value));
+        }
+
+        return urlBuilder.toString();
+    }
+
+    /**
+     * Fetches movies from a specific page.
+     *
+     * @param page the page number to fetch.
+     * @return a map containing movie data.
+     */
+    private Map<String, Object> fetchMoviesFromPage(int page) {
+        String url = buildUrl("discover/movie", Map.of("page", String.valueOf(page)));
+        return performApiRequest(url);
+    }
+
+    /**
+     * Performs an API request to the given URL.
+     *
+     * @param url the API endpoint.
+     * @return a map containing the response data.
+     */
+    private Map<String, Object> performApiRequest(String url) {
+        try {
+            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return response.getBody();
+            } else {
+                log.warn("API request failed with status: {}", response.getStatusCode());
+            }
+        } catch (Exception e) {
+            log.error("Exception occurred during API request: {}", e.getMessage(), e);
+        }
+        return null;
+    }
+
+    /**
+     * Performs an API request with logging.
+     *
+     * @param url         the API endpoint.
+     * @param description the description of the operation.
+     * @return a map containing the response data.
+     */
+    private Map<String, Object> performApiRequestWithLogging(String url, String description) {
+        log.info("Performing {} via TMDb API: {}", description, url);
+        return performApiRequest(url);
     }
 }

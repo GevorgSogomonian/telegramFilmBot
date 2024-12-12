@@ -1,26 +1,35 @@
 package org.example.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-@Entity
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
 public class Movie {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
-    private Long movieId; // Идентификатор фильма из TMDb API
+    @Column(nullable = false, unique = true)
+    private String title;
 
-    private String title; // Название фильма
-    @Column(name = "description", columnDefinition = "TEXT") // Или "character varying(5000)"
+    @Column(length = 1000)
     private String description;
-    private Double rating; // Средний рейтинг из TMDb API
-    private String genreIds; // Ids жанра
+
+    private String genreIds;
+
+    private Double rating;
+
+    @Column(nullable = false, unique = true)
+    private Long tmdbId;
+
+    public Movie(Long tmdbId, String title) {
+        this.title = title;
+        this.tmdbId = tmdbId;
+    }
 }

@@ -1,19 +1,14 @@
 package org.example.entity;
 
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.OneToMany;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-import java.util.HashSet;
-import java.util.Set;
-
-@Entity
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
 public class Usr {
 
     @Id
@@ -21,16 +16,18 @@ public class Usr {
     private Long id;
 
     @Column(unique = true, nullable = false)
-    private Long chatId; // Идентификатор чата (уникальный)
+    private Long chatId;
 
-    private String username; // Никнейм пользователя
-    private String firstName; // Имя пользователя
-    private String lastName; // Фамилия пользователя
-    private String languageCode; // Код языка пользователя (например, "ru", "en")
-    private Boolean isPremium; // Информация о премиум-аккаунте
-    private Boolean isBot; // Является ли пользователь ботом
+    @Column(unique = true)
+    private String username;
 
-    // Оцененные фильмы
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<UserMovieRating> ratings = new HashSet<>();
+    private String firstName;
+
+    private String lastName;
+
+    private String languageCode;
+
+    private Boolean isPremium;
+
+    private Boolean isBot;
 }

@@ -8,6 +8,8 @@ import org.example.entity.Usr;
 import org.example.repository.MovieRepository;
 import org.example.repository.UserMovieRatingRepository;
 import org.example.repository.UsrRepository;
+import org.example.util.MessageFormatter;
+import org.example.util.UserStateManager;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -18,15 +20,14 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 @Service
 @RequiredArgsConstructor
 public class TelegramBotService extends TelegramLongPollingBot {
 
-    private final Map<String, Movie> activeRatings = new ConcurrentHashMap<>();
-    private final Map<String, String> waitingForInput = new ConcurrentHashMap<>(); // Отслеживание состояния пользователя
+    private final Map<String, Movie> activeRatings = new HashMap<>();
+    private final UserStateManager userStateManager;
     private final UserMovieRatingRepository userMovieRatingRepository;
     private final CommandProcessingService commandProcessingService;
     private final UsrRepository usrRepository;
@@ -72,28 +73,20 @@ public class TelegramBotService extends TelegramLongPollingBot {
             Long chatId = update.getMessage().getChatId();
             String userMessage = update.getMessage().getText();
 
-            // Проверяем, существует ли пользователь в базе
             usrRepository.findByChatId(chatId).ifPresentOrElse(
-                    usr -> System.out.println("Пользователь уже зарегистрирован: " + usr.getUsername()),
-                    () -> registerNewUser(update) // Регистрация нового пользователя
+                    usr -> System.out.println("User already registered: " + usr.getUsername()),
+                    () -> registerNewUser(update)
             );
 
-            // Проверка на состояние ожидания ввода
-            if (waitingForInput.containsKey(chatId.toString())) {
-                String pendingCommand = waitingForInput.remove(chatId.toString());
-                if (pendingCommand.equals("/search")) {
+            if (userStateManager.isWaitingForInput(chatId.toString())) {
+                String pendingCommand = userStateManager.getPendingCommand(chatId.toString());
+                userStateManager.clearState(chatId.toString());
+                if ("/search".equals(pendingCommand)) {
                     processSearchQuery(chatId.toString(), userMessage);
                 }
                 return;
             }
 
-            // Проверяем, есть ли активный фильм для оценки
-            if (activeRatings.containsKey(chatId.toString())) {
-                handleRatingResponse(update);
-                return;
-            }
-
-            // Обработка команды (если это команда)
             String command = userMessage.split(" ")[0].toLowerCase();
             commandHandlers.getOrDefault(command, this::handleUnknownCommand).accept(update);
         }
@@ -102,85 +95,56 @@ public class TelegramBotService extends TelegramLongPollingBot {
     private void handleSearchCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
         sendResponse(chatId, "🔍 *Введите название фильма, который вы хотите найти.*");
-        waitingForInput.put(chatId, "/search");
+        userStateManager.setPendingCommand(chatId, "/search");
     }
 
     private void processSearchQuery(String chatId, String query) {
         if (query == null || query.trim().isEmpty()) {
-            sendResponse(chatId, "⚠️ *Название фильма не может быть пустым.* Пожалуйста, попробуйте снова.");
-            waitingForInput.put(chatId, "/search"); // Возвращаем пользователя в состояние ожидания
+            sendResponse(chatId, "⚠️ *Название фильма не может быть пустым.* Попробуйте снова.");
+            userStateManager.setPendingCommand(chatId, "/search");
             return;
         }
 
-        // Выполняем поиск фильмов
         String result = commandProcessingService.searchMovie(query.trim());
-        if (result.isEmpty()) {
-            sendResponse(chatId, "😔 *Фильмы не найдены.* Попробуйте другой запрос.");
-        } else {
-            sendSplitResponse(chatId, "🎬 *Результаты поиска:*\n\n" + result);
-        }
+        sendSplitResponse(chatId, result.isEmpty() ? "😔 *Фильмы не найдены.* Попробуйте другой запрос." : result);
     }
 
     private void handlePopularCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
         String result = commandProcessingService.getPopularMoviesRandom();
-
-        if (!result.isEmpty()) {
-            sendSplitResponse(chatId, "🌟 *Популярные фильмы прямо сейчас*:\n\n" + result);
-        } else {
-            sendResponse(chatId, "😔 *Не удалось получить список популярных фильмов.* Попробуйте позже.");
-        }
+        sendSplitResponse(chatId, result.isEmpty() ? "😔 *Не удалось получить популярные фильмы.* Попробуйте позже." : result);
     }
 
     private void handleRandomCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
         String result = commandProcessingService.getRandomMovie();
-
         sendSplitResponse(chatId, result);
     }
 
     private void handleRatePopularCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
-
-        // Получаем случайный популярный фильм
-        Map<String, Object> randomMovieData = tmdbService.getRandomPopularMovie();
-        Movie randomMovie = commandProcessingService.saveOrUpdateMovie(randomMovieData);
-
-        // Сохраняем фильм для дальнейшей оценки
+        Movie randomMovie = commandProcessingService.saveOrUpdateMovie(tmdbService.getRandomPopularMovie());
         activeRatings.put(chatId, randomMovie);
-
-        // Формируем сообщение с описанием, жанрами и рейтингом
-        String response = String.format(
-                "🎥 *Мы предлагаем вам фильм:*\n" +
-                        "🎬 *Название*: %s\n📖 *Описание*: %s\n🎭 *Жанры*: %s\n⭐ *Рейтинг*: %s\n\n" +
-                        "❓ *Вы уже видели этот фильм?* Ответьте 'да' или 'нет'.",
-                randomMovie.getTitle(),
-                truncateDescription(randomMovie.getDescription()),
-                tmdbService.getGenreNames(randomMovie.getGenreIds()), // Жанры
-                randomMovie.getRating() != null ? randomMovie.getRating().toString() : "Нет рейтинга"
-        );
-
-        sendSplitResponse(chatId, response);
+        sendSplitResponse(chatId, MessageFormatter.formatMovieForRating(randomMovie));
     }
 
     private void handlePersonalCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
         String result = commandProcessingService.getPersonalRecommendation(chatId);
+        sendSplitResponse(chatId, result.isEmpty() ? "😔 *Нет подходящих фильмов.*" : result);
+    }
 
-        sendSplitResponse(chatId, "❤️ *Ваши персональные рекомендации*:\n\n" + result);
+    private void handleRateAllCommand(Update update) {
+        String chatId = update.getMessage().getChatId().toString();
+        Movie randomMovie = commandProcessingService.getRandomMovieForRating();
+        activeRatings.put(chatId, randomMovie);
+        sendSplitResponse(chatId, MessageFormatter.formatMovieForRating(randomMovie));
     }
 
     private void handleAllRatedCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
-
-        try {
-            String ratedMovies = commandProcessingService.getAllRatedMovies(chatId);
-
-            sendSplitResponse(chatId, "📋 *Ваши оценки фильмов:*\n\n" + ratedMovies);
-        } catch (Exception e) {
-            sendResponse(chatId, "❌ *Произошла ошибка при получении списка оцененных фильмов.* Попробуйте позже.");
-            e.printStackTrace();
-        }
+        String ratedMovies = commandProcessingService.getAllRatedMovies(chatId);
+        sendSplitResponse(chatId, ratedMovies.isEmpty() ? "😔 *Вы ещё не оценили фильмы.*" : ratedMovies);
     }
 
     private void handleMostPersonalCommand(Update update) {
@@ -189,140 +153,15 @@ public class TelegramBotService extends TelegramLongPollingBot {
         sendSplitResponse(chatId, result);
     }
 
-    private void saveUserRating(String chatId, int rating) {
-        Long userChatId = Long.parseLong(chatId);
-        Usr user = usrRepository.findByChatId(userChatId)
-                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
-        Movie movie = activeRatings.get(chatId);
-
-        if (movie == null) {
-            sendResponse(chatId, "⚠️ *Фильм для оценки не найден.* Попробуйте команду /rate или /rateall.");
-            return;
-        }
-
-        Optional<UserMovieRating> existingRating = userMovieRatingRepository.findByUserIdAndMovieId(user.getId(), movie.getId());
-
-        if (existingRating.isPresent()) {
-            UserMovieRating userMovieRating = existingRating.get();
-            userMovieRating.setRating(rating);
-            userMovieRatingRepository.save(userMovieRating);
-            sendResponse(chatId, "✅ *Ваша оценка обновлена!* Вы поставили " + rating + " баллов. 🎉");
-        } else {
-            UserMovieRating userMovieRating = new UserMovieRating();
-            userMovieRating.setUser(user);
-            userMovieRating.setMovie(movie);
-            userMovieRating.setRating(rating);
-            userMovieRatingRepository.save(userMovieRating);
-            sendResponse(chatId, "⭐ *Спасибо за вашу оценку!* Вы поставили " + rating + " баллов. 😊");
-        }
-
-        activeRatings.remove(chatId);
-    }
-
-    private void handleRatingResponse(Update update) {
-        String chatId = update.getMessage().getChatId().toString();
-        String userResponse = update.getMessage().getText().toLowerCase();
-
-        // Проверяем, есть ли активный фильм для пользователя
-        Movie movie = activeRatings.get(chatId);
-        if (movie == null) {
-            sendResponse(chatId, "😕 *У вас нет активного фильма для оценки.*\n" +
-                    "Попробуйте команды /ratepopular или /rateall, чтобы начать!");
-            return;
-        }
-
-        if (userResponse.equals("да")) {
-            // Сохраняем фильм в базу (если не был сохранен ранее)
-            movieRepository.save(movie);
-
-            sendResponse(chatId, "🎬 Отлично! Как бы вы оценили этот фильм по шкале от 1 до 10? ⭐");
-        } else if (userResponse.equals("нет")) {
-            sendResponse(chatId, "🙅‍♂️ *Спасибо за ваш ответ!* Если хотите, попробуйте другой фильм. 🎲");
-            activeRatings.remove(chatId); // Удаляем из активных рейтингов
-        } else {
-            try {
-                int rating = Integer.parseInt(userResponse);
-                if (rating >= 1 && rating <= 10) {
-                    saveUserRating(chatId, rating);
-                    sendResponse(chatId, "🎉 *Спасибо за вашу оценку!*\nХотите попробовать еще раз? Используйте команду /ratepopular или /rateall.");
-                } else {
-                    sendResponse(chatId, "⚠️ Пожалуйста, введите число от 1 до 10. ⭐");
-                }
-            } catch (NumberFormatException e) {
-                sendResponse(chatId, "❓ *Неизвестный ответ.* Напишите 'да', 'нет' или число от 1 до 10. 🧐");
-            }
-        }
-    }
-
-    private void handleRateAllCommand(Update update) {
-        String chatId = update.getMessage().getChatId().toString();
-
-        try {
-            Movie randomMovie = commandProcessingService.getRandomMovieForRating();
-            activeRatings.put(chatId, randomMovie);
-
-            String response = String.format(
-                    "🎲 *Случайный фильм для оценки:*\n" +
-                            "🎬 *Название*: %s\n📖 *Описание*: %s\n🎭 *Жанры*: %s\n⭐ *Рейтинг*: %s\n\n" +
-                            "❓ *Вы уже видели этот фильм?* Ответьте 'да' или 'нет'.",
-                    randomMovie.getTitle(),
-                    truncateDescription(randomMovie.getDescription()),
-                    tmdbService.getGenreNames(randomMovie.getGenreIds()), // Добавление жанров
-                    randomMovie.getRating() != null ? randomMovie.getRating().toString() : "Нет рейтинга"
-            );
-
-            sendSplitResponse(chatId, response);
-        } catch (Exception e) {
-            sendResponse(chatId, "😞 *К сожалению, не удалось получить случайный фильм для оценки.* Попробуйте позже!");
-            e.printStackTrace();
-        }
-    }
-
-    private String truncateDescription(String description) {
-        int maxLength = 500;
-        if (description != null && description.length() > maxLength) {
-            return description.substring(0, maxLength) + "...";
-        }
-        return description != null ? description : "Описание недоступно.";
-    }
-
     private void handleUnknownCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
-
-        String response = """
-        🐾 *Добро пожаловать в вашего личного помощника по фильмам!* 🎥✨
-        
-        _Вот список доступных команд, которые вы можете использовать:_
-        
-        🔍 `/search` — Найти фильм по названию и получить информацию о нем.
-        
-        🌟 `/popular` — Получить список случайных популярных фильмов прямо сейчас.
-        
-        🎲 `/random` — Увидеть абсолютно случайный фильм из всех доступных в базе TMDb.
-        
-        ❤️ `/personal` — Получить рекомендации фильмов, которые максимально соответствуют вашим предпочтениям.
-        
-        🏆 `/mostpersonal` — Узнать самый подходящий вам фильм на основе ваших оценок.
-        
-        🎬 `/ratepopular` — Оцените случайный популярный фильм. Вы уже видели его? Расскажите нам!
-        
-        🌀 `/rateall` — Оцените абсолютно случайный фильм, не обязательно популярный.
-        
-        📜 `/allrated` — Посмотрите список всех фильмов, которые вы оценили, и их оценки.
-        
-        🛠️ _Пример использования:_ Просто введите нужную команду, например, `/random`, чтобы получить фильм!
-        
-        🧡 _Спасибо, что пользуетесь нашим ботом! Мы здесь, чтобы сделать ваш просмотр фильмов ещё более увлекательным._ 😊
-        """;
-
-        sendSplitResponse(chatId, response);
+        sendSplitResponse(chatId, MessageFormatter.getHelpMessage());
     }
 
     private void sendSplitResponse(String chatId, String text) {
         int maxMessageLength = 4096;
         for (int i = 0; i < text.length(); i += maxMessageLength) {
-            String part = text.substring(i, Math.min(text.length(), i + maxMessageLength));
-            sendResponse(chatId, part);
+            sendResponse(chatId, text.substring(i, Math.min(text.length(), i + maxMessageLength)));
         }
     }
 
@@ -330,6 +169,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
         SendMessage message = new SendMessage();
         message.setChatId(chatId);
         message.setText(text);
+        message.enableMarkdown(true);
 
         try {
             execute(message);
@@ -343,7 +183,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
             Long chatId = update.getMessage().getChatId();
             org.telegram.telegrambots.meta.api.objects.User fromUser = update.getMessage().getFrom();
 
-            // Создаем нового пользователя
             Usr newUser = new Usr();
             newUser.setChatId(chatId);
             newUser.setUsername(fromUser.getUserName());
@@ -353,10 +192,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
             newUser.setIsPremium(fromUser.getIsPremium());
             newUser.setIsBot(fromUser.getIsBot());
 
-            // Сохраняем пользователя в базу
             usrRepository.save(newUser);
-
-            // Отправляем приветственное сообщение
             sendResponse(chatId.toString(), "Добро пожаловать, " + newUser.getFirstName() + "! Вы успешно зарегистрированы.");
         }
     }
