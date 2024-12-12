@@ -50,7 +50,7 @@ public class CommandProcessingService {
                 try {
                     Movie movie = saveOrUpdateMovie(movieData); // Обновляем или сохраняем фильм в базе
                     result.append(String.format(
-                            "Название: %s\nОписание: %s\nЖанры: %s\nРейтинг: %s\n\n",
+                            "🎬 *Название: %s\n📝 *Описание: %s\n🎭 *Жанры: %s\n⭐ *Рейтинг: %s\n\n",
                             movie.getTitle(),
                             truncateDescription(movie.getDescription()),
                             tmdbService.getGenreNames(movie.getGenreIds()), // Добавление жанров
