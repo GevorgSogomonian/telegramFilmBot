@@ -26,6 +26,7 @@ import java.util.function.Consumer;
 public class TelegramBotService extends TelegramLongPollingBot {
 
     private final Map<String, Movie> activeRatings = new ConcurrentHashMap<>();
+    private final Map<String, String> waitingForInput = new ConcurrentHashMap<>(); // Отслеживание состояния пользователя
     private final UserMovieRatingRepository userMovieRatingRepository;
     private final CommandProcessingService commandProcessingService;
     private final UsrRepository usrRepository;
@@ -77,8 +78,18 @@ public class TelegramBotService extends TelegramLongPollingBot {
                     () -> registerNewUser(update) // Регистрация нового пользователя
             );
 
+            // Проверка на состояние ожидания ввода
+            if (waitingForInput.containsKey(chatId.toString())) {
+                String pendingCommand = waitingForInput.remove(chatId.toString());
+                if (pendingCommand.equals("/search")) {
+                    processSearchQuery(chatId.toString(), userMessage);
+                }
+                return;
+            }
+
+            // Проверяем, есть ли активный фильм для оценки
             if (activeRatings.containsKey(chatId.toString())) {
-                handleRatingResponse(update); // Обрабатываем дальнейшее взаимодействие
+                handleRatingResponse(update);
                 return;
             }
 
@@ -90,10 +101,24 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     private void handleSearchCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
-        String query = update.getMessage().getText().replace("/search ", "");
-        String result = commandProcessingService.searchMovie(query);
+        sendResponse(chatId, "🔍 *Введите название фильма, который вы хотите найти.*");
+        waitingForInput.put(chatId, "/search");
+    }
 
-        sendSplitResponse(chatId, result);
+    private void processSearchQuery(String chatId, String query) {
+        if (query == null || query.trim().isEmpty()) {
+            sendResponse(chatId, "⚠️ *Название фильма не может быть пустым.* Пожалуйста, попробуйте снова.");
+            waitingForInput.put(chatId, "/search"); // Возвращаем пользователя в состояние ожидания
+            return;
+        }
+
+        // Выполняем поиск фильмов
+        String result = commandProcessingService.searchMovie(query.trim());
+        if (result.isEmpty()) {
+            sendResponse(chatId, "😔 *Фильмы не найдены.* Попробуйте другой запрос.");
+        } else {
+            sendSplitResponse(chatId, "🎬 *Результаты поиска:*\n\n" + result);
+        }
     }
 
     private void handlePopularCommand(Update update) {
@@ -202,7 +227,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
         Movie movie = activeRatings.get(chatId);
         if (movie == null) {
             sendResponse(chatId, "😕 *У вас нет активного фильма для оценки.*\n" +
-                    "Попробуйте команды /rate или /rateall, чтобы начать!");
+                    "Попробуйте команды /ratepopular или /rateall, чтобы начать!");
             return;
         }
 
@@ -219,10 +244,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 int rating = Integer.parseInt(userResponse);
                 if (rating >= 1 && rating <= 10) {
                     saveUserRating(chatId, rating);
-                    sendResponse(chatId, String.format(
-                            "🎭 *Делитесь вашими впечатлениями!*\n\nХотите продолжить? Попробуйте команду /rateall!",
-                            rating
-                    ));
+                    sendResponse(chatId, "🎉 *Спасибо за вашу оценку!*\nХотите попробовать еще раз? Используйте команду /ratepopular или /rateall.");
                 } else {
                     sendResponse(chatId, "⚠️ Пожалуйста, введите число от 1 до 10. ⭐");
                 }
@@ -231,7 +253,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
             }
         }
     }
-
 
     private void handleRateAllCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
@@ -273,7 +294,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
         
         _Вот список доступных команд, которые вы можете использовать:_
         
-        🔍 `/search <название>` — Найти фильм по названию и получить информацию о нем. Например: `/search Inception`
+        🔍 `/search` — Найти фильм по названию и получить информацию о нем.
         
         🌟 `/popular` — Получить список случайных популярных фильмов прямо сейчас.
         

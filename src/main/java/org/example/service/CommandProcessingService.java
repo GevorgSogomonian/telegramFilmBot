@@ -44,25 +44,28 @@ public class CommandProcessingService {
                 return rating2.compareTo(rating1);
             });
 
-            StringBuilder result = new StringBuilder("🔍 *Результаты поиска:*\n\n");
+            StringBuilder result = new StringBuilder();
             for (int i = 0; i < Math.min(5, movies.size()); i++) {
                 Map<String, Object> movieData = movies.get(i);
-                Movie movie = saveOrUpdateMovie(movieData);
-                result.append(String.format(
-                        "🎬 *Название*: %s\n📝 *Описание*: %s\n🎭 *Жанры*: %s\n⭐ *Рейтинг*: %s\n\n",
-                        movie.getTitle(),
-                        truncateDescription(movie.getDescription()),
-                        tmdbService.getGenreNames(movie.getGenreIds()),
-                        movie.getRating() != null ? movie.getRating().toString() : "Нет рейтинга"
-                ));
+                try {
+                    Movie movie = saveOrUpdateMovie(movieData); // Обновляем или сохраняем фильм в базе
+                    result.append(String.format(
+                            "Название: %s\nОписание: %s\nЖанры: %s\nРейтинг: %s\n\n",
+                            movie.getTitle(),
+                            truncateDescription(movie.getDescription()),
+                            tmdbService.getGenreNames(movie.getGenreIds()), // Добавление жанров
+                            movie.getRating() != null ? movie.getRating().toString() : "Нет рейтинга"
+                    ));
+                } catch (Exception e) {
+                    logger.error("Ошибка обработки данных фильма: {}", movieData, e);
+                }
             }
 
             return result.toString().trim();
         }
 
-        return "😕 *Фильмы не найдены*. Попробуйте изменить запрос.";
+        return "Фильмы не найдены.";
     }
-
 
     // Утилитарный метод для парсинга рейтинга
     private Double parseRating(Object ratingObj) {
@@ -87,25 +90,37 @@ public class CommandProcessingService {
 
         logger.info("Пользователь найден: {} ({} {})", user.getUsername(), user.getFirstName(), user.getLastName());
 
+        // Извлекаем предпочтения пользователя
+        Map<String, Double> userGenres = getUserGenres(user);
+        if (userGenres.isEmpty()) {
+            logger.warn("У пользователя с chatId {} отсутствуют оценки фильмов.", chatId);
+            return "🤷‍♂️ *У нас нет достаточно данных, чтобы предложить вам рекомендации.*\n\n" +
+                    "🎬 *Оцените несколько фильмов, используя команды*:\n" +
+                    "🔹 `/rateall` — случайный фильм для оценки.\n" +
+                    "🔹 `/ratepopular` — популярный фильм для оценки.";
+        }
+
         List<Movie> allMovies = movieRepository.findAll();
         Collections.shuffle(allMovies);
         List<Movie> movies = allMovies.stream().limit(10).toList();
 
-        logger.info("Найдено {} фильмов в базе. Отобрано {} фильмов для анализа.", allMovies.size(), movies.size());
-
         if (movies.isEmpty()) {
-            logger.warn("В базе данных отсутствуют фильмы для рекомендаций.");
-            return "😔 *У нас пока нет фильмов для рекомендаций. Попробуйте позже!*";
+            logger.warn("В базе данных отсутствуют фильмы для анализа.");
+            return "😞 *К сожалению, у нас пока нет фильмов для анализа.* Попробуйте позже!";
         }
 
-        Map<String, Double> userGenres = getUserGenres(user);
-        logger.info("Вектор жанров пользователя: {}", userGenres);
+        logger.info("Найдено {} фильмов в базе. Отобрано {} фильмов для анализа.", allMovies.size(), movies.size());
 
         Map<Movie, Double> similarityMap = new HashMap<>();
         for (Movie movie : movies) {
             Map<String, Integer> movieVector = createGenreVector(movie.getGenreIds());
             double similarity = computeCosineSimilarity(userGenres, movieVector);
-            similarityMap.put(movie, similarity);
+
+            // Добавляем только фильмы с ненулевым сходством
+            if (similarity > 0) {
+                similarityMap.put(movie, similarity);
+            }
+
             logger.debug("Косинусное сходство для фильма '{}' (id: {}): {}", movie.getTitle(), movie.getMovieId(), similarity);
         }
 
@@ -117,7 +132,7 @@ public class CommandProcessingService {
 
         if (sortedMovies.isEmpty()) {
             logger.warn("Не удалось подобрать подходящие фильмы для пользователя.");
-            return "😔 *К сожалению, мы не смогли подобрать подходящие фильмы для вас.*";
+            return "🤷‍♂️ *К сожалению, мы не смогли подобрать подходящие фильмы для вас.*";
         }
 
         StringBuilder response = new StringBuilder();
@@ -125,7 +140,7 @@ public class CommandProcessingService {
             Movie movie = entry.getKey();
             double similarity = entry.getValue();
             response.append(String.format(
-                    "🎬 *Название*: %s\n📝 *Описание*: %s\n🎭 *Жанры*: %s\n🎯 *Сходство с вашими предпочтениями*: %.2f%%\n---\n",
+                    "🎬 *Название*: %s\n📖 *Описание*: %s\n🎭 *Жанры*: %s\n🤝 *Сходство*: %.2f%%\n---\n",
                     movie.getTitle(),
                     truncateDescription(movie.getDescription()),
                     tmdbService.getGenreNames(movie.getGenreIds()),
@@ -263,7 +278,7 @@ public class CommandProcessingService {
                 .toList();
 
         if (ratings.isEmpty()) {
-            return "📝 *Вы пока не оценили ни одного фильма.* Попробуйте команды /rate или /rateall!";
+            return "📝 *Вы пока не оценили ни одного фильма.* Попробуйте команды /ratepopular или /rateall!";
         }
 
         return ratings.stream()
@@ -329,14 +344,21 @@ public class CommandProcessingService {
 
         logger.info("Пользователь найден: {} ({} {})", user.getUsername(), user.getFirstName(), user.getLastName());
 
-        List<Movie> allMovies = movieRepository.findAll(); // Анализируем всю таблицу
-        if (allMovies.isEmpty()) {
-            logger.warn("В базе данных отсутствуют фильмы для рекомендаций.");
-            return "😔 *У нас пока нет фильмов для рекомендаций.* Попробуйте позже!";
+        // Извлекаем предпочтения пользователя
+        Map<String, Double> userGenres = getUserGenres(user);
+        if (userGenres.isEmpty()) {
+            logger.warn("У пользователя с chatId {} отсутствуют оценки фильмов.", chatId);
+            return "🤷‍♂️ *У нас нет достаточно данных, чтобы предложить вам рекомендацию.*\n\n" +
+                    "🎬 *Оцените несколько фильмов, используя команды*:\n" +
+                    "🔹 `/rateall` — случайный фильм для оценки.\n" +
+                    "🔹 `/ratepopular` — популярный фильм для оценки.";
         }
 
-        Map<String, Double> userGenres = getUserGenres(user);
-        logger.info("Вектор жанров пользователя: {}", userGenres);
+        List<Movie> allMovies = movieRepository.findAll();
+        if (allMovies.isEmpty()) {
+            logger.warn("В базе данных отсутствуют фильмы для анализа.");
+            return "😞 *К сожалению, у нас пока нет фильмов для анализа.* Попробуйте позже!";
+        }
 
         Movie bestMatch = null;
         double maxSimilarity = -1;
@@ -355,18 +377,17 @@ public class CommandProcessingService {
 
         if (bestMatch == null) {
             logger.warn("Не удалось подобрать подходящий фильм для пользователя.");
-            return "😞 *Мы не смогли найти подходящий фильм для вас.* Попробуйте позже!";
+            return "🤷‍♂️ *К сожалению, мы не смогли подобрать подходящий фильм для вас.*";
         }
 
         logger.info("Лучший фильм для пользователя: {} (id: {}). Сходство: {}", bestMatch.getTitle(), bestMatch.getMovieId(), maxSimilarity);
 
-        // Формируем ответ
         return String.format(
-                "🎥 *Самый подходящий вам фильм:*\n" +
-                        "🎬 *Название*: %s\n📖 *Описание*: %s\n🎭 *Жанры*: %s\n⭐ *Сходство*: %.2f%%",
+                "🎥 *Самый подходящий вам фильм:*\n\n" +
+                        "🎬 *Название*: %s\n📖 *Описание*: %s\n🎭 *Жанры*: %s\n🤝 *Сходство*: %.2f%%",
                 bestMatch.getTitle(),
                 truncateDescription(bestMatch.getDescription()),
-                tmdbService.getGenreNames(bestMatch.getGenreIds()), // Вывод жанров
+                tmdbService.getGenreNames(bestMatch.getGenreIds()),
                 maxSimilarity * 100
         );
     }
