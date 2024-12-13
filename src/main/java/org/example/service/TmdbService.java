@@ -120,15 +120,6 @@ public class TmdbService {
     }
 
     public Map<String, Object> getRandomPopularMovie() {
-//        List<Map<String, Object>> movies = new ArrayList<>();
-//        for (int i = 1; i <= 5; i++) {
-//            Map<String, Object> response = getPopularMovies(i);
-//
-//            if (response != null && response.containsKey("results")) {
-//                movies.addAll((List<Map<String, Object>>) response.get("results"));
-//            }
-//        }
-
         return popularMoviesCache.get(new Random().nextInt(popularMoviesCache.size()));
     }
 

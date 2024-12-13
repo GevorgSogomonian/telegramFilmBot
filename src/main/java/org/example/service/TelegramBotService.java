@@ -159,17 +159,17 @@ public class TelegramBotService extends TelegramLongPollingBot {
         String response = String.format(
                 """
                         %s
-                        🤝 *Сходство:* %.2f%%
+                        🤝 *Сходство:* %s
                         
                         """,
                 commandProcessingService.movietoString(randomMovie),
-                similarity * 100
+                similarity != 0 ? String.valueOf(similarity * 100).substring(0, 4) + "%" : "Не известно"
         );
 
         SendMessage message = new SendMessage();
         message.setChatId(update.getMessage().getChatId().toString());
         message.setText("""
-                ❓ *Вы уже видели этот фильм?*""");
+                ❓ *Хотите оценить этот фильм?*""");
         message.setParseMode("Markdown");
 
         ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
@@ -369,17 +369,17 @@ public class TelegramBotService extends TelegramLongPollingBot {
                     """
                             🎲 *Случайный фильм для оценки:*
                             %s
-                            🤝 *Сходство:* %.2f%%
+                            🤝 *Сходство:* %s
                             
                             """,
                     commandProcessingService.movietoString(randomMovie),
-                    similarity * 100
+                    similarity != 0 ? String.valueOf(similarity * 100).substring(0, 4) + "%": "Не известно"
             );
 
             SendMessage message = new SendMessage();
             message.setChatId(update.getMessage().getChatId().toString());
             message.setText("""
-                    ❓ *Вы уже видели этот фильм?*""");
+                    ❓ *Хотите оценить этот фильм?*""");
             message.setParseMode("Markdown");
 
             ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();

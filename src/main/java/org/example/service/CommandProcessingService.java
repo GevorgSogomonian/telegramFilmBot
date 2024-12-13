@@ -61,9 +61,13 @@ public class CommandProcessingService {
                     double similarity = computeCosineSimilarity(getUserGenres(user), createGenreVector(movie.getGenreIds()));
                     result.append(String.format("""
                             %s
-                            🤝 *Сходство:* %.2f%%
+                            🤝 *Сходство:* %s
                             
-                            """,movietoString(movie), similarity * 100));
+                            """,
+                            movietoString(movie),
+                            similarity != 0 ? String.valueOf(similarity * 100).substring(0, 4) + "%": "Не известно")
+
+                    );
                 } catch (Exception e) {
                     logger.error("Ошибка обработки данных фильма: {}", movieData, e);
                 }
@@ -173,11 +177,11 @@ public class CommandProcessingService {
             response.append(String.format(
                     """
                             %s
-                            🤝 *Сходство:* %.2f%%
+                            🤝 *Сходство:* %s
                             
                             """,
                     movietoString(movie),
-                    similarity * 100
+                    similarity != 0 ? String.valueOf(similarity * 100).substring(0, 4) + "%" : "Не известно"
             ));
         }
 
@@ -425,9 +429,9 @@ public class CommandProcessingService {
         return String.format(
                 """
                         %s
-                        🤝 *Сходство:* %.2f%%""",
+                        🤝 *Сходство:* %s""",
                 movietoString(bestMatch),
-                maxSimilarity * 100
+                maxSimilarity != 0 ? String.valueOf(maxSimilarity * 100).substring(0, 4) + "%" : "Не известно"
         );
     }
 }
