@@ -15,6 +15,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
@@ -89,7 +90,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
             if (waitingForInput.containsKey(chatId.toString())) {
                 String pendingCommand = waitingForInput.remove(chatId.toString());
                 if (pendingCommand.equals("search")) {
-                    processSearchQuery(chatId.toString(), userMessage);
+                    processSearchQuery(update, userMessage);
                 }
                 return;
             }
@@ -108,23 +109,40 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     private void handleSearchCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
-        sendResponse(chatId, "🔍 *Введите название фильма, который вы хотите найти.*");
+//        sendResponse(chatId, "🔍 *Введите название фильма, который вы хотите найти.*");
+
+
+        ReplyKeyboardRemove removeKeyboard = new ReplyKeyboardRemove();
+        removeKeyboard.setRemoveKeyboard(true);
+
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId);
+        message.setText("🔍 *Введите название фильма, который вы хотите найти.*");
+        message.setReplyMarkup(removeKeyboard);
+
+        try {
+            execute(message);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         waitingForInput.put(chatId, "search");
     }
 
-    private void processSearchQuery(String chatId, String query) {
+    private void processSearchQuery(Update update, String query) {
         if (query == null || query.trim().isEmpty()) {
-            sendResponse(chatId, "⚠️ *Название фильма не может быть пустым.* Пожалуйста, попробуйте снова.");
-            waitingForInput.put(chatId, "search"); // Возвращаем пользователя в состояние ожидания
+            sendResponse(update.getMessage().getChatId().toString(), "⚠️ *Название фильма не может быть пустым.* Пожалуйста, попробуйте снова.");
+            waitingForInput.put(update.getMessage().getChatId().toString(), "search"); // Возвращаем пользователя в состояние ожидания
             return;
         }
 
         // Выполняем поиск фильмов
         String result = commandProcessingService.searchMovie(query.trim());
         if (result.isEmpty()) {
-            sendResponse(chatId, "😔 *Фильмы не найдены.* Попробуйте другой запрос.");
+            sendResponse(update.getMessage().getChatId().toString(), "😔 *Фильмы не найдены.* Попробуйте другой запрос.");
+            handleUnknownCommand(update);
         } else {
-            sendSplitResponse(chatId, "🎬 *Результаты поиска:*\n\n" + result);
+            sendSplitResponse(update.getMessage().getChatId().toString(), "🎬 *Результаты поиска:*\n\n" + result);
+            handleUnknownCommand(update);
         }
     }
 
