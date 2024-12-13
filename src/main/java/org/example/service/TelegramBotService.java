@@ -32,7 +32,7 @@ import java.util.function.Consumer;
 public class TelegramBotService extends TelegramLongPollingBot {
 
     private final Map<String, Movie> activeRatings = new ConcurrentHashMap<>();
-    private final Map<String, String> waitingForInput = new ConcurrentHashMap<>(); // Отслеживание состояния пользователя
+    private final Map<String, String> waitingForInput = new ConcurrentHashMap<>();
     private final UserMovieRatingRepository userMovieRatingRepository;
     private final CommandProcessingService commandProcessingService;
     private final UsrRepository usrRepository;
@@ -53,10 +53,8 @@ public class TelegramBotService extends TelegramLongPollingBot {
         System.out.println("Token: " + botToken);
 
         commandHandlers.put("🔍 Поиск", this::handleSearchCommand);
-//        commandHandlers.put("🌟 Популярные фильмы", this::handlePopularCommand);
-//        commandHandlers.put("🎲 Случайный фильм", this::handleRandomCommand);
         commandHandlers.put("🌀 Рандомный фильм", this::handleRateAllCommand);
-        commandHandlers.put("🎬 Популярный фильм", this::handleRatePopularCommand);
+        commandHandlers.put("🎬 Популярные фильмы", this::handleRatePopularCommand);
         commandHandlers.put("🏆 Лучшее совпадение", this::handleMostPersonalCommand);
         commandHandlers.put("❤️ Рекомендации", this::handlePersonalCommand);
         commandHandlers.put("📜 Мои оценки", this::handleAllRatedCommand);
@@ -78,46 +76,41 @@ public class TelegramBotService extends TelegramLongPollingBot {
             Long chatId = update.getMessage().getChatId();
             String userMessage = update.getMessage().getText();
 
-            // Проверяем, существует ли пользователь в базе
             usrRepository.findByChatId(chatId).ifPresentOrElse(
                     usr -> System.out.println("Пользователь уже зарегистрирован: " + usr.getUsername()),
-                    () -> registerNewUser(update) // Регистрация нового пользователя
+                    () -> registerNewUser(update)
             );
 
-            // Проверка на состояние ожидания ввода
             if (waitingForInput.containsKey(chatId.toString())) {
                 String pendingCommand = waitingForInput.remove(chatId.toString());
                 if (pendingCommand.equals("search")) {
-                    processSearchQuery(update, userMessage);
+                    processSearchQuery(update);
                 }
                 return;
             }
 
-            // Проверяем, есть ли активный фильм для оценки
             if (activeRatings.containsKey(chatId.toString())) {
                 handleRatingResponse(update);
                 return;
             }
 
-            // Обработка команды (если это команда)
-//            String command = userMessage.split(" ")[0].toLowerCase();
             commandHandlers.getOrDefault(userMessage, this::handleUnknownCommand).accept(update);
         }
     }
 
     private void handleSearchCommand(Update update) {
         String chatId = update.getMessage().getChatId().toString();
-//        sendResponse(chatId, "🔍 *Введите название фильма, который вы хотите найти.*");
-
 
         ReplyKeyboardRemove removeKeyboard = new ReplyKeyboardRemove();
         removeKeyboard.setRemoveKeyboard(true);
 
         SendMessage message = new SendMessage();
         message.setChatId(chatId);
-        message.setText("🔍 *Введите название фильма, который вы хотите найти.*");
+        message.setText("""
+                🔍 *Введите название фильма, который вы хотите найти.*""");
         message.setReplyMarkup(removeKeyboard);
 
+        message.setParseMode("Markdown");
         try {
             execute(message);
         } catch (Exception e) {
@@ -126,89 +119,73 @@ public class TelegramBotService extends TelegramLongPollingBot {
         waitingForInput.put(chatId, "search");
     }
 
-    private void processSearchQuery(Update update, String query) {
-        if (query == null || query.trim().isEmpty()) {
-            sendResponse(update.getMessage().getChatId().toString(), "⚠️ *Название фильма не может быть пустым.* Пожалуйста, попробуйте снова.");
-            waitingForInput.put(update.getMessage().getChatId().toString(), "search"); // Возвращаем пользователя в состояние ожидания
+    private void processSearchQuery(Update update) {
+        String messageText = update.getMessage().getText();
+        String chatId = update.getMessage().getChatId().toString();
+        if (messageText == null || messageText.trim().isEmpty()) {
+            sendResponse(chatId, """
+                    ⚠️ *Название фильма не может быть пустым.*
+                    Пожалуйста, попробуйте снова.""");
+            waitingForInput.put(chatId, "search");
             return;
         }
 
-        // Выполняем поиск фильмов
-        String result = commandProcessingService.searchMovie(query.trim());
+        String result = commandProcessingService.searchMovie(update);
         if (result.isEmpty()) {
-            sendResponse(update.getMessage().getChatId().toString(), "😔 *Фильмы не найдены.* Попробуйте другой запрос.");
-            handleUnknownCommand(update);
+            sendResponse(chatId, """
+                    😔 *Фильмы не найдены.*
+                    Попробуйте другой запрос.""");
         } else {
-            sendSplitResponse(update.getMessage().getChatId().toString(), "🎬 *Результаты поиска:*\n\n" + result);
-            handleUnknownCommand(update);
-//            activeRatings.put(update.getMessage().getChatId(), randomMovie);
+            sendSplitResponse(chatId, String.format("""
+                    🎬 *Результаты поиска:*
+                    
+                    %s""", result));
         }
-    }
-
-    private void handlePopularCommand(Update update) {
-        String chatId = update.getMessage().getChatId().toString();
-        String result = commandProcessingService.getPopularMoviesRandom();
-
-        if (!result.isEmpty()) {
-            sendSplitResponse(chatId, "🌟 *Популярные фильмы прямо сейчас*:\n\n" + result);
-        } else {
-            sendResponse(chatId, "😔 *Не удалось получить список популярных фильмов.* Попробуйте позже.");
-        }
-    }
-
-    private void handleRandomCommand(Update update) {
-        String chatId = update.getMessage().getChatId().toString();
-        String result = commandProcessingService.getRandomMovie();
-
-        sendSplitResponse(chatId, result);
+        handleUnknownCommand(update);
     }
 
     private void handleRatePopularCommand(Update update) {
-        String chatId = update.getMessage().getChatId().toString();
+        Long chatId = update.getMessage().getChatId();
 
-        // Получаем случайный популярный фильм
+        Usr user = usrRepository.findByChatId(chatId)
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
         Map<String, Object> randomMovieData = tmdbService.getRandomPopularMovie();
         Movie randomMovie = commandProcessingService.saveOrUpdateMovie(randomMovieData);
+        double similarity = commandProcessingService.computeCosineSimilarity(commandProcessingService.getUserGenres(user),
+                commandProcessingService.createGenreVector(randomMovie.getGenreIds()));
 
-        // Сохраняем фильм для дальнейшей оценки
-        activeRatings.put(chatId, randomMovie);
+        activeRatings.put(chatId.toString(), randomMovie);
 
-        // Формируем сообщение с описанием, жанрами и рейтингом
         String response = String.format(
-                "🎥 *Мы предлагаем вам фильм:*\n" +
-                        "🎬 *Название*: %s\n📖 *Описание*: %s\n📜 *Релиз*: %s\n🎭 *Жанры*: %s\n⭐ *Рейтинг*: %s\n\n",
-//                        "❓ *Вы уже видели этот фильм?* Ответьте 'да' или 'нет'.",
-                randomMovie.getTitle(),
-                truncateDescription(randomMovie.getDescription()),
-                randomMovie.getReleaseDate(),
-                tmdbService.getGenreNames(randomMovie.getGenreIds()), // Жанры
-                randomMovie.getRating() != null ? randomMovie.getRating().toString() : "Нет рейтинга"
+                """
+                        %s
+                        🤝 *Сходство:* %.2f%%
+                        
+                        """,
+                commandProcessingService.movietoString(randomMovie),
+                similarity * 100
         );
 
         SendMessage message = new SendMessage();
         message.setChatId(update.getMessage().getChatId().toString());
-        message.setText("❓ *Вы уже видели этот фильм?*");
+        message.setText("""
+                ❓ *Вы уже видели этот фильм?*""");
+        message.setParseMode("Markdown");
 
-        // Создаем клавиатуру
         ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
-        keyboardMarkup.setResizeKeyboard(true); // Делает кнопки компактными
+        keyboardMarkup.setResizeKeyboard(true);
 
-        // Создаем строки клавиатуры
         List<KeyboardRow> keyboardRows = new ArrayList<>();
 
         KeyboardRow row1 = new KeyboardRow();
         row1.add(new KeyboardButton("Да"));
         row1.add(new KeyboardButton("Нет"));
 
-        // Добавляем строки в клавиатуру
         keyboardRows.add(row1);
-
         keyboardMarkup.setKeyboard(keyboardRows);
-
-        // Присоединяем клавиатуру к сообщению
         message.setReplyMarkup(keyboardMarkup);
 
-        sendSplitResponse(chatId, response);
+        sendSplitResponse(chatId.toString(), response);
         try {
             execute(message);
         } catch (Exception e) {
@@ -220,7 +197,10 @@ public class TelegramBotService extends TelegramLongPollingBot {
         String chatId = update.getMessage().getChatId().toString();
         String result = commandProcessingService.getPersonalRecommendation(chatId);
 
-        sendSplitResponse(chatId, "❤️ *Ваши персональные рекомендации*:\n\n" + result);
+        sendSplitResponse(chatId, String.format("""
+                ❤️ *Ваши персональные рекомендации*:
+                
+                %s""",result));
     }
 
     private void handleAllRatedCommand(Update update) {
@@ -229,9 +209,14 @@ public class TelegramBotService extends TelegramLongPollingBot {
         try {
             String ratedMovies = commandProcessingService.getAllRatedMovies(chatId);
 
-            sendSplitResponse(chatId, "📋 *Ваши оценки фильмов:*\n\n" + ratedMovies);
+            sendSplitResponse(chatId, String.format("""
+                    📋 *Ваши оценки фильмов:*
+                    
+                    %s""", ratedMovies));
         } catch (Exception e) {
-            sendResponse(chatId, "❌ *Произошла ошибка при получении списка оцененных фильмов.* Попробуйте позже.");
+            sendResponse(chatId, """
+                    ❌ *Произошла ошибка при получении списка оцененных фильмов.*
+                    Попробуйте позже.""");
             e.printStackTrace();
         }
     }
@@ -249,7 +234,12 @@ public class TelegramBotService extends TelegramLongPollingBot {
         Movie movie = activeRatings.get(chatId);
 
         if (movie == null) {
-            sendResponse(chatId, "⚠️ *Фильм для оценки не найден.* Попробуйте команду /rate или /rateall.");
+            sendResponse(chatId, """
+                    ⚠️ *Фильм для оценки не найден.*
+                    
+                    Попробуйте эти команды:
+                    🎬 *Популярные фильмы*
+                    🌀 *Рандомный фильм*""");
             return;
         }
 
@@ -259,15 +249,23 @@ public class TelegramBotService extends TelegramLongPollingBot {
             UserMovieRating userMovieRating = existingRating.get();
             userMovieRating.setRating(rating);
             userMovieRatingRepository.save(userMovieRating);
-            sendResponse(chatId, "✅ *Ваша оценка обновлена!* Вы поставили " + rating + " баллов. 🎉");
+            sendResponse(chatId, String.format("""
+                    ✅ *Ваша оценка обновлена!*
+                    Вы поставили %s баллов. 🎉""", rating));
         } else {
             UserMovieRating userMovieRating = new UserMovieRating();
             userMovieRating.setUser(user);
             userMovieRating.setMovie(movie);
             userMovieRating.setRating(rating);
             userMovieRatingRepository.save(userMovieRating);
-            sendResponse(chatId, "⭐ *Спасибо за вашу оценку!* Вы поставили " + rating + " баллов. 😊");
+            sendResponse(chatId, String.format("""
+                    ⭐ *Спасибо за вашу оценку!*
+                    Вы поставили %s баллов. 😊""", rating));
         }
+
+        Map<String, Double> genrePreferences = commandProcessingService.getUserGenres(user);
+        user.setGenrePreferences(CommandProcessingService.mapToJson(genrePreferences));
+        usrRepository.save(user);
 
         activeRatings.remove(chatId);
     }
@@ -276,31 +274,31 @@ public class TelegramBotService extends TelegramLongPollingBot {
         String chatId = update.getMessage().getChatId().toString();
         String userResponse = update.getMessage().getText().toLowerCase();
 
-        // Проверяем, есть ли активный фильм для пользователя
         Movie movie = activeRatings.get(chatId);
         if (movie == null) {
-            sendResponse(chatId, "😕 *У вас нет активного фильма для оценки.*\n\n" +
-                    "Попробуйте эти команды:\n" +
-                    "*🎬 Популярный фильм*\n" +
-                    "*🌀 Рандомный фильм*");
+            sendResponse(chatId, """
+                    😕 *У вас нет активного фильма для оценки.*
+                    
+                    Попробуйте эти команды:
+                    🎬 *Популярные фильмы*
+                    🌀 *Рандомный фильм*""");
             return;
         }
 
         if (userResponse.equals("да")) {
-            // Сохраняем фильм в базу (если не был сохранен ранее)
             movieRepository.save(movie);
 
-            sendResponse(chatId, "🎬 Отлично! Как бы вы оценили этот фильм по шкале от 1 до 10? ⭐");
+            sendResponse(chatId, """
+                    🎬 Отлично! Как бы вы оценили этот фильм по шкале от 1 до 10? ⭐""");
 
             SendMessage message = new SendMessage();
             message.setChatId(update.getMessage().getChatId().toString());
             message.setText("Выберите оценку:");
+            message.setParseMode("Markdown");
 
-            // Создаем клавиатуру
             ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
-            keyboardMarkup.setResizeKeyboard(true); // Делает кнопки компактными
+            keyboardMarkup.setResizeKeyboard(true);
 
-            // Создаем строки клавиатуры
             List<KeyboardRow> keyboardRows = new ArrayList<>();
 
             KeyboardRow row1 = new KeyboardRow();
@@ -317,13 +315,11 @@ public class TelegramBotService extends TelegramLongPollingBot {
             row2.add(new KeyboardButton("9"));
             row2.add(new KeyboardButton("10"));
 
-            // Добавляем строки в клавиатуру
             keyboardRows.add(row1);
             keyboardRows.add(row2);
 
             keyboardMarkup.setKeyboard(keyboardRows);
 
-            // Присоединяем клавиатуру к сообщению
             message.setReplyMarkup(keyboardMarkup);
 
             try {
@@ -332,81 +328,84 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 e.printStackTrace();
             }
         } else if (userResponse.equals("нет")) {
-            sendResponse(chatId, "🙅‍♂️ *Спасибо за ваш ответ!* Если хотите, попробуйте другой фильм. 🎲");
+            sendResponse(chatId, """
+                    🙅‍♂️ *Спасибо за ваш ответ!*
+                    Если хотите, попробуйте другой фильм. 🎲""");
             handleUnknownCommand(update);
-            activeRatings.remove(chatId); // Удаляем из активных рейтингов
+            activeRatings.remove(chatId);
         } else {
             try {
                 int rating = Integer.parseInt(userResponse);
                 if (rating >= 1 && rating <= 10) {
                     saveUserRating(chatId, rating);
-                    sendResponse(chatId, "🎉 *Спасибо за вашу оценку!*\n" +
-                            "Хотите попробовать еще раз?");
+                    sendResponse(chatId, """
+                            🎉 *Хотите попробовать еще раз?*""");
 
                     handleUnknownCommand(update);
                 } else {
-                    sendResponse(chatId, "⚠️ Пожалуйста, введите число от 1 до 10. ⭐");
+                    sendResponse(chatId, """
+                            ⚠️ Пожалуйста, введите число от 1 до 10. ⭐""");
                 }
             } catch (NumberFormatException e) {
-                sendResponse(chatId, "❓ *Неизвестный ответ.* 🧐");
+                sendResponse(chatId, """
+                        ❓ *Неизвестный ответ.* 🧐""");
             }
         }
     }
 
     private void handleRateAllCommand(Update update) {
-        String chatId = update.getMessage().getChatId().toString();
+        Long chatId = update.getMessage().getChatId();
+
+        Usr user = usrRepository.findByChatId(chatId)
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
         try {
             Movie randomMovie = commandProcessingService.getRandomMovieForRating();
-            activeRatings.put(chatId, randomMovie);
+            double similarity = commandProcessingService.computeCosineSimilarity(commandProcessingService.getUserGenres(user),
+                    commandProcessingService.createGenreVector(randomMovie.getGenreIds()));
+            activeRatings.put(chatId.toString(), randomMovie);
 
             String response = String.format(
-                    "🎲 *Случайный фильм для оценки:*\n" +
-                            "🎬 *Название*: %s\n" +
-                            "📖 *Описание*: %s\n" +
-                            "📜 *Релиз*: %s\n" +
-                            "🎭 *Жанры*: %s\n" +
-                            "⭐ *Рейтинг*: %s\n" +
-                            "\n",
-//                            "❓ *Вы уже видели этот фильм?* Ответьте 'да' или 'нет'.",
-                    randomMovie.getTitle(),
-                    truncateDescription(randomMovie.getDescription()),
-                    randomMovie.getReleaseDate().replace("-", "."),
-                    tmdbService.getGenreNames(randomMovie.getGenreIds()), // Добавление жанров
-                    randomMovie.getRating() != null ? randomMovie.getRating().toString() : "Нет рейтинга"
+                    """
+                            🎲 *Случайный фильм для оценки:*
+                            %s
+                            🤝 *Сходство:* %.2f%%
+                            
+                            """,
+                    commandProcessingService.movietoString(randomMovie),
+                    similarity * 100
             );
 
             SendMessage message = new SendMessage();
             message.setChatId(update.getMessage().getChatId().toString());
-            message.setText("❓ *Вы уже видели этот фильм?*");
+            message.setText("""
+                    ❓ *Вы уже видели этот фильм?*""");
+            message.setParseMode("Markdown");
 
-            // Создаем клавиатуру
             ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
-            keyboardMarkup.setResizeKeyboard(true); // Делает кнопки компактными
+            keyboardMarkup.setResizeKeyboard(true);
 
-            // Создаем строки клавиатуры
             List<KeyboardRow> keyboardRows = new ArrayList<>();
 
             KeyboardRow row1 = new KeyboardRow();
             row1.add(new KeyboardButton("Да"));
             row1.add(new KeyboardButton("Нет"));
 
-            // Добавляем строки в клавиатуру
             keyboardRows.add(row1);
 
             keyboardMarkup.setKeyboard(keyboardRows);
 
-            // Присоединяем клавиатуру к сообщению
             message.setReplyMarkup(keyboardMarkup);
 
-            sendSplitResponse(chatId, response);
+            sendSplitResponse(chatId.toString(), response);
             try {
                 execute(message);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         } catch (Exception e) {
-            sendResponse(chatId, "😞 *К сожалению, не удалось получить случайный фильм для оценки.* Попробуйте позже!");
+            sendResponse(chatId.toString(), """
+                    😞 *К сожалению, не удалось получить случайный фильм для оценки.* Попробуйте позже!""");
             e.printStackTrace();
         }
     }
@@ -419,96 +418,15 @@ public class TelegramBotService extends TelegramLongPollingBot {
         return description != null ? description : "Описание недоступно.";
     }
 
-//    private void handleUnknownCommand(Update update) {
-//        String chatId = update.getMessage().getChatId().toString();
-//
-//        String response = """
-//        🐾 *Добро пожаловать в вашего личного помощника по фильмам!* 🎥✨
-//
-//        _Вот список доступных команд, которые вы можете использовать:_
-//
-//        🔍 `/search` — Найти фильм по названию и получить информацию о нем.
-//
-//        🌟 `/popular` — Получить список случайных популярных фильмов прямо сейчас.
-//
-//        🎲 `/random` — Увидеть абсолютно случайный фильм из всех доступных в базе TMDb.
-//
-//        ❤️ `/personal` — Получить рекомендации фильмов, которые максимально соответствуют вашим предпочтениям.
-//
-//        🏆 `/mostpersonal` — Узнать самый подходящий вам фильм на основе ваших оценок.
-//
-//        🎬 `/ratepopular` — Оцените случайный популярный фильм. Вы уже видели его? Расскажите нам!
-//
-//        🌀 `/rateall` — Оцените абсолютно случайный фильм, не обязательно популярный.
-//
-//        📜 `/allrated` — Посмотрите список всех фильмов, которые вы оценили, и их оценки.
-//
-//        🛠️ _Пример использования:_ Просто введите нужную команду, например, `/random`, чтобы получить фильм!
-//
-//        🧡 _Спасибо, что пользуетесь нашим ботом! Мы здесь, чтобы сделать ваш просмотр фильмов ещё более увлекательным._ 😊
-//        """;
-//
-//        sendSplitResponse(chatId, response);
-//    }
-
-//    private void handleUnknownCommand(Update update) {
-//        SendMessage message = new SendMessage();
-//        message.setChatId(update.getMessage().getChatId().toString());
-//        message.setText("Выберите действие:");
-//
-//        // Создаем Inline-клавиатуру
-//        InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
-//
-//        // Создаем кнопки
-//        List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
-//
-//        List<InlineKeyboardButton> row1 = new ArrayList<>();
-//        row1.add(InlineKeyboardButton.builder()
-//                .text("Популярные фильмы 🎥")
-//                .callbackData("/popular")
-//                .build());
-//        row1.add(InlineKeyboardButton.builder()
-//                .text("Случайный фильм 🎲")
-//                .callbackData("/random")
-//                .build());
-//
-//        List<InlineKeyboardButton> row2 = new ArrayList<>();
-//        row2.add(InlineKeyboardButton.builder()
-//                .text("Мои оценки ⭐")
-//                .callbackData("/allrated")
-//                .build());
-//
-//        // Добавляем строки в клавиатуру
-//        rowsInline.add(row1);
-//        rowsInline.add(row2);
-//
-//        inlineKeyboardMarkup.setKeyboard(rowsInline);
-//
-//        // Присоединяем Inline-клавиатуру к сообщению
-//        message.setReplyMarkup(inlineKeyboardMarkup);
-//
-//        try {
-//            execute(message);
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
-//    }
-
     private void handleUnknownCommand(Update update) {
         SendMessage message = new SendMessage();
         message.setChatId(update.getMessage().getChatId().toString());
         message.setText("Выберите действие:");
 
-        // Создаем клавиатуру
         ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
-        keyboardMarkup.setResizeKeyboard(true); // Делает кнопки компактными
+        keyboardMarkup.setResizeKeyboard(true);
 
-        // Создаем строки клавиатуры
         List<KeyboardRow> keyboardRows = new ArrayList<>();
-
-//        KeyboardRow row1 = new KeyboardRow();
-//        row1.add(new KeyboardButton("🌟 Популярные фильмы"));
-//        row1.add(new KeyboardButton("🎲 Случайный фильм"));
 
         KeyboardRow row2 = new KeyboardRow();
         row2.add(new KeyboardButton("📜 Мои оценки"));
@@ -519,34 +437,11 @@ public class TelegramBotService extends TelegramLongPollingBot {
         row3.add(new KeyboardButton("🏆 Лучшее совпадение"));
 
         KeyboardRow row4 = new KeyboardRow();
-        row4.add(new KeyboardButton("🎬 Популярный фильм"));
+        row4.add(new KeyboardButton("🎬 Популярные фильмы"));
 
         KeyboardRow row5 = new KeyboardRow();
         row5.add(new KeyboardButton("🌀 Рандомный фильм"));
 
-
-        //        🔍 `/search` — Найти фильм по названию и получить информацию о нем.
-//
-//        🌟 `/popular` — Получить список случайных популярных фильмов прямо сейчас.
-//
-//        🎲 `/random` — Увидеть абсолютно случайный фильм из всех доступных в базе TMDb.
-//
-//        ❤️ `/personal` — Получить рекомендации фильмов, которые максимально соответствуют вашим предпочтениям.
-//
-//        🏆 `/mostpersonal` — Узнать самый подходящий вам фильм на основе ваших оценок.
-//
-//        🎬 `/ratepopular` — Оцените случайный популярный фильм. Вы уже видели его? Расскажите нам!
-//
-//        🌀 `/rateall` — Оцените абсолютно случайный фильм, не обязательно популярный.
-//
-//        📜 `/allrated` — Посмотрите список всех фильмов, которые вы оценили, и их оценки.
-//
-//        🛠️ _Пример использования:_ Просто введите нужную команду, например, `/random`, чтобы получить фильм!
-//
-//        🧡 _Спасибо, что пользуетесь нашим ботом! Мы здесь, чтобы сделать ваш просмотр фильмов ещё более увлекательным._ 😊
-//        """;
-        // Добавляем строки в клавиатуру
-//        keyboardRows.add(row1);
         keyboardRows.add(row2);
         keyboardRows.add(row3);
         keyboardRows.add(row4);
@@ -554,7 +449,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
         keyboardMarkup.setKeyboard(keyboardRows);
 
-        // Присоединяем клавиатуру к сообщению
         message.setReplyMarkup(keyboardMarkup);
 
         try {
@@ -577,6 +471,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
         message.setChatId(chatId);
         message.setText(text);
 
+        message.setParseMode("Markdown");
         try {
             execute(message);
         } catch (TelegramApiException e) {
@@ -589,7 +484,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
             Long chatId = update.getMessage().getChatId();
             org.telegram.telegrambots.meta.api.objects.User fromUser = update.getMessage().getFrom();
 
-            // Создаем нового пользователя
             Usr newUser = new Usr();
             newUser.setChatId(chatId);
             newUser.setUsername(fromUser.getUserName());
@@ -599,11 +493,10 @@ public class TelegramBotService extends TelegramLongPollingBot {
             newUser.setIsPremium(fromUser.getIsPremium());
             newUser.setIsBot(fromUser.getIsBot());
 
-            // Сохраняем пользователя в базу
             usrRepository.save(newUser);
 
-            // Отправляем приветственное сообщение
-            sendResponse(chatId.toString(), "Добро пожаловать, " + newUser.getFirstName() + "! Вы успешно зарегистрированы.");
+            sendResponse(chatId.toString(), String.format("""
+                    Добро пожаловать, *%s*! Вы успешно зарегистрированы.""", newUser.getFirstName()));
         }
     }
 }

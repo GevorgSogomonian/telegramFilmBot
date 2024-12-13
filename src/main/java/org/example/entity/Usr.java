@@ -29,6 +29,7 @@ public class Usr {
     private String languageCode; // Код языка пользователя (например, "ru", "en")
     private Boolean isPremium; // Информация о премиум-аккаунте
     private Boolean isBot; // Является ли пользователь ботом
+    private String genrePreferences;
 
     // Оцененные фильмы
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)

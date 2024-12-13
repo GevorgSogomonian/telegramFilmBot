@@ -15,10 +15,10 @@ public class MovieController {
         this.tmdbService = tmdbService;
     }
 
-    @GetMapping("/movies/popular")
-    public Map<String, Object> getPopularMovies() {
-        return tmdbService.getPopularMovies();
-    }
+//    @GetMapping("/movies/popular")
+//    public Map<String, Object> getPopularMovies() {
+//        return tmdbService.getPopularMovies();
+//    }
 
     @GetMapping("/movies/search")
     public Map<String, Object> searchMovie(@RequestParam String query) {
