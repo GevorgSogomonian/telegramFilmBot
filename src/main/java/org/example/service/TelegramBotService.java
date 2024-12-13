@@ -291,7 +291,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
             movieRepository.save(movie);
 
             sendResponse(chatId, "🎬 Отлично! Как бы вы оценили этот фильм по шкале от 1 до 10? ⭐");
-            handleUnknownCommand(update);
 
             SendMessage message = new SendMessage();
             message.setChatId(update.getMessage().getChatId().toString());
