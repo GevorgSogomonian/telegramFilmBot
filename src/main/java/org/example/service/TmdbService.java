@@ -7,8 +7,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -35,14 +33,14 @@ public class TmdbService {
 
     //Получить список популярных фильмов.
     public Map<String, Object> getPopularMovies() {
-        String url = String.format("%s/movie/popular?api_key=%s", apiUrl, apiKey);
+        String url = String.format("%s/movie/popular?api_key=%s&language=ru", apiUrl, apiKey);
         return restTemplate.getForObject(url, Map.class);
     }
 
     //Поиск фильма по названию.
     public Map<String, Object> searchMovie(String query) {
         try {
-            String url = String.format("%s/search/movie?api_key=%s&query=%s", apiUrl, apiKey, query);
+            String url = String.format("%s/search/movie?api_key=%s&query=%s&language=ru", apiUrl, apiKey, query);
             log.info("Выполняется запрос к TMDb API: {}", url);
 
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
@@ -77,7 +75,7 @@ public class TmdbService {
     }
 
     private Map<String, Object> fetchMoviesFromAllPages(int page) {
-        String url = String.format("https://api.themoviedb.org/3/discover/movie?api_key=%s&page=%d", apiKey, page);
+        String url = String.format("https://api.themoviedb.org/3/discover/movie?api_key=%s&page=%d&language=ru", apiKey, page);
         return performApiRequest(url);
     }
 
@@ -101,7 +99,7 @@ public class TmdbService {
 
     // Получение списка жанров и кэширование
     public void fetchAndCacheGenres() {
-        String url = String.format("%s/genre/movie/list?api_key=%s", apiUrl, apiKey);
+        String url = String.format("%s/genre/movie/list?api_key=%s&language=ru", apiUrl, apiKey);
         try {
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             if (response != null && response.containsKey("genres")) {

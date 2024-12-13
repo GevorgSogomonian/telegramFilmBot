@@ -21,6 +21,7 @@ public class Movie {
     private String title; // Название фильма
     @Column(name = "description", columnDefinition = "TEXT") // Или "character varying(5000)"
     private String description;
+    private String releaseDate;
     private Double rating; // Средний рейтинг из TMDb API
     private String genreIds; // Ids жанра
 }

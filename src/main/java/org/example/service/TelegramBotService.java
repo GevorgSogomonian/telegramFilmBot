@@ -13,10 +13,8 @@ import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -55,12 +53,12 @@ public class TelegramBotService extends TelegramLongPollingBot {
         System.out.println("Token: " + botToken);
 
         commandHandlers.put("🔍 Поиск", this::handleSearchCommand);
-        commandHandlers.put("🌟 Популярные фильмы", this::handlePopularCommand);
-        commandHandlers.put("🎲 Случайный фильм", this::handleRandomCommand);
+//        commandHandlers.put("🌟 Популярные фильмы", this::handlePopularCommand);
+//        commandHandlers.put("🎲 Случайный фильм", this::handleRandomCommand);
+        commandHandlers.put("🌀 Рандомный фильм", this::handleRateAllCommand);
+        commandHandlers.put("🎬 Популярный фильм", this::handleRatePopularCommand);
         commandHandlers.put("🏆 Лучшее совпадение", this::handleMostPersonalCommand);
-        commandHandlers.put("🎬 Оценить популярный фильм", this::handleRatePopularCommand);
         commandHandlers.put("❤️ Рекомендации", this::handlePersonalCommand);
-        commandHandlers.put("🌀 Оценить рандомный фильм", this::handleRateAllCommand);
         commandHandlers.put("📜 Мои оценки", this::handleAllRatedCommand);
     }
 
@@ -143,6 +141,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
         } else {
             sendSplitResponse(update.getMessage().getChatId().toString(), "🎬 *Результаты поиска:*\n\n" + result);
             handleUnknownCommand(update);
+//            activeRatings.put(update.getMessage().getChatId(), randomMovie);
         }
     }
 
@@ -177,10 +176,11 @@ public class TelegramBotService extends TelegramLongPollingBot {
         // Формируем сообщение с описанием, жанрами и рейтингом
         String response = String.format(
                 "🎥 *Мы предлагаем вам фильм:*\n" +
-                        "🎬 *Название*: %s\n📖 *Описание*: %s\n🎭 *Жанры*: %s\n⭐ *Рейтинг*: %s\n\n",
+                        "🎬 *Название*: %s\n📖 *Описание*: %s\n📜 *Релиз*: %s\n🎭 *Жанры*: %s\n⭐ *Рейтинг*: %s\n\n",
 //                        "❓ *Вы уже видели этот фильм?* Ответьте 'да' или 'нет'.",
                 randomMovie.getTitle(),
                 truncateDescription(randomMovie.getDescription()),
+                randomMovie.getReleaseDate(),
                 tmdbService.getGenreNames(randomMovie.getGenreIds()), // Жанры
                 randomMovie.getRating() != null ? randomMovie.getRating().toString() : "Нет рейтинга"
         );
@@ -280,9 +280,9 @@ public class TelegramBotService extends TelegramLongPollingBot {
         Movie movie = activeRatings.get(chatId);
         if (movie == null) {
             sendResponse(chatId, "😕 *У вас нет активного фильма для оценки.*\n\n" +
-                    "Попробуйте команды эти команды:\n" +
-                    "*🎬 Оценить популярный фильм*\n" +
-                    "*🌀 Оценить рандомный фильм*");
+                    "Попробуйте эти команды:\n" +
+                    "*🎬 Популярный фильм*\n" +
+                    "*🌀 Рандомный фильм*");
             return;
         }
 
@@ -362,10 +362,11 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
             String response = String.format(
                     "🎲 *Случайный фильм для оценки:*\n" +
-                            "🎬 *Название*: %s\n📖 *Описание*: %s\n🎭 *Жанры*: %s\n⭐ *Рейтинг*: %s\n\n",
+                            "🎬 *Название*: %s\n📖 *Описание*: %s\n📜 *Релиз*: %s\n🎭 *Жанры*: %s\n⭐ *Рейтинг*: %s\n\n",
 //                            "❓ *Вы уже видели этот фильм?* Ответьте 'да' или 'нет'.",
                     randomMovie.getTitle(),
                     truncateDescription(randomMovie.getDescription()),
+                    randomMovie.getReleaseDate().replace("-", "."),
                     tmdbService.getGenreNames(randomMovie.getGenreIds()), // Добавление жанров
                     randomMovie.getRating() != null ? randomMovie.getRating().toString() : "Нет рейтинга"
             );
@@ -500,9 +501,9 @@ public class TelegramBotService extends TelegramLongPollingBot {
         // Создаем строки клавиатуры
         List<KeyboardRow> keyboardRows = new ArrayList<>();
 
-        KeyboardRow row1 = new KeyboardRow();
-        row1.add(new KeyboardButton("🌟 Популярные фильмы"));
-        row1.add(new KeyboardButton("🎲 Случайный фильм"));
+//        KeyboardRow row1 = new KeyboardRow();
+//        row1.add(new KeyboardButton("🌟 Популярные фильмы"));
+//        row1.add(new KeyboardButton("🎲 Случайный фильм"));
 
         KeyboardRow row2 = new KeyboardRow();
         row2.add(new KeyboardButton("📜 Мои оценки"));
@@ -513,10 +514,10 @@ public class TelegramBotService extends TelegramLongPollingBot {
         row3.add(new KeyboardButton("🏆 Лучшее совпадение"));
 
         KeyboardRow row4 = new KeyboardRow();
-        row4.add(new KeyboardButton("🎬 Оценить популярный фильм"));
+        row4.add(new KeyboardButton("🎬 Популярный фильм"));
 
         KeyboardRow row5 = new KeyboardRow();
-        row5.add(new KeyboardButton("🌀 Оценить рандомный фильм"));
+        row5.add(new KeyboardButton("🌀 Рандомный фильм"));
 
 
         //        🔍 `/search` — Найти фильм по названию и получить информацию о нем.
@@ -540,7 +541,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 //        🧡 _Спасибо, что пользуетесь нашим ботом! Мы здесь, чтобы сделать ваш просмотр фильмов ещё более увлекательным._ 😊
 //        """;
         // Добавляем строки в клавиатуру
-        keyboardRows.add(row1);
+//        keyboardRows.add(row1);
         keyboardRows.add(row2);
         keyboardRows.add(row3);
         keyboardRows.add(row4);

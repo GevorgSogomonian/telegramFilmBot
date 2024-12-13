@@ -96,8 +96,9 @@ public class CommandProcessingService {
             logger.warn("У пользователя с chatId {} отсутствуют оценки фильмов.", chatId);
             return "🤷‍♂️ *У нас нет достаточно данных, чтобы предложить вам рекомендации.*\n\n" +
                     "🎬 *Оцените несколько фильмов, используя команды*:\n" +
-                    "🔹 `/rateall` — случайный фильм для оценки.\n" +
-                    "🔹 `/ratepopular` — популярный фильм для оценки.";
+                    "Попробуйте эти команды:\n" +
+                    "*🎬 Популярный фильм*\n" +
+                    "*🌀 Рандомный фильм*";
         }
 
         List<Movie> allMovies = movieRepository.findAll();
@@ -134,9 +135,9 @@ public class CommandProcessingService {
             logger.warn("Не удалось подобрать подходящие фильмы для пользователя.");
             return "🤷‍♂️ *К сожалению, мы не смогли подобрать подходящие фильмы для вас.*\n" +
                     "🎬 *Оцените несколько фильмов, чтобы улучшить персональные рекомендации.*\n\n" +
-                    "Попробуйте команды:\n" +
-                    "🔹 `/rateall` — случайный фильм для оценки.\n" +
-                    "🔹 `/ratepopular` — популярный фильм для оценки.";
+                    "Попробуйте эти команды:\n" +
+                    "*🎬 Популярный фильм*\n" +
+                    "*🌀 Рандомный фильм*";
         }
 
         StringBuilder response = new StringBuilder();
@@ -248,6 +249,7 @@ public class CommandProcessingService {
             return movieRepository.findByMovieId(movieId).orElseGet(() -> {
                 Movie newMovie = new Movie();
                 newMovie.setMovieId(movieId);
+                newMovie.setReleaseDate((String) randomMovie.getOrDefault("release_date", "Не известно"));
                 newMovie.setTitle((String) randomMovie.getOrDefault("title", "Нет названия"));
                 newMovie.setRating(parseRating(randomMovie.get("vote_average")));
                 newMovie.setDescription((String) randomMovie.getOrDefault("overview", "Описание недоступно")); // Сохраняем описание
@@ -282,7 +284,10 @@ public class CommandProcessingService {
                 .toList();
 
         if (ratings.isEmpty()) {
-            return "📝 *Вы пока не оценили ни одного фильма.* Попробуйте команды /ratepopular или /rateall!";
+            return "📝 *Вы пока не оценили ни одного фильма.* " +
+                    "Попробуйте эти команды:\n" +
+                    "*🎬 Популярный фильм*\n" +
+                    "*🌀 Рандомный фильм*";
         }
 
         return ratings.stream()
@@ -303,6 +308,7 @@ public class CommandProcessingService {
             // Обновляем существующий фильм
             Movie movie = existingMovie.get();
             movie.setTitle((String) movieData.getOrDefault("title", "Нет названия"));
+            movie.setReleaseDate((String) movieData.getOrDefault("release_date", "Не известно"));
             movie.setDescription((String) movieData.getOrDefault("overview", "Нет описания"));
             movie.setRating(parseRating(movieData.get("vote_average")));
 
@@ -321,6 +327,7 @@ public class CommandProcessingService {
             Movie newMovie = new Movie();
             newMovie.setMovieId(movieId);
             newMovie.setTitle((String) movieData.getOrDefault("title", "Нет названия"));
+            newMovie.setReleaseDate((String) movieData.getOrDefault("release_date", "Не известно"));
             newMovie.setDescription((String) movieData.getOrDefault("overview", "Нет описания"));
             newMovie.setRating(parseRating(movieData.get("vote_average")));
 
@@ -353,9 +360,10 @@ public class CommandProcessingService {
         if (userGenres.isEmpty()) {
             logger.warn("У пользователя с chatId {} отсутствуют оценки фильмов.", chatId);
             return "🤷‍♂️ *У нас нет достаточно данных, чтобы предложить вам рекомендацию.*\n\n" +
-                    "🎬 *Оцените несколько фильмов, используя команды*:\n" +
-                    "🔹 `/rateall` — случайный фильм для оценки.\n" +
-                    "🔹 `/ratepopular` — популярный фильм для оценки.";
+                    "🎬 *Оцените несколько фильмов*:\n" +
+                    "Попробуйте эти команды:\n" +
+                    "*🎬 Популярный фильм*\n" +
+                    "*🌀 Рандомный фильм*";
         }
 
         List<Movie> allMovies = movieRepository.findAll();
