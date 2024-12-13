@@ -50,9 +50,15 @@ public class CommandProcessingService {
                 try {
                     Movie movie = saveOrUpdateMovie(movieData); // Обновляем или сохраняем фильм в базе
                     result.append(String.format(
-                            "🎬 *Название: %s\n📝 *Описание: %s\n🎭 *Жанры: %s\n⭐ *Рейтинг: %s\n\n",
+                            "🎬 *Название: %s\n" +
+                                    "📝 *Описание: %s\n" +
+                                    "🎭 *Жанры: %s\n" +
+                                    "📜 *Релиз*: %s\n" +
+                                    "⭐ *Рейтинг: %s\n" +
+                                    "\n",
                             movie.getTitle(),
                             truncateDescription(movie.getDescription()),
+                            movie.getReleaseDate(),
                             tmdbService.getGenreNames(movie.getGenreIds()), // Добавление жанров
                             movie.getRating() != null ? movie.getRating().toString() : "Нет рейтинга"
                     ));
@@ -134,7 +140,8 @@ public class CommandProcessingService {
         if (sortedMovies.isEmpty()) {
             logger.warn("Не удалось подобрать подходящие фильмы для пользователя.");
             return "🤷‍♂️ *К сожалению, мы не смогли подобрать подходящие фильмы для вас.*\n" +
-                    "🎬 *Оцените несколько фильмов, чтобы улучшить персональные рекомендации.*\n\n" +
+                    "🎬 *Оцените несколько фильмов, чтобы улучшить персональные рекомендации.*\n" +
+                    "\n" +
                     "Попробуйте эти команды:\n" +
                     "*🎬 Популярный фильм*\n" +
                     "*🌀 Рандомный фильм*";
@@ -145,9 +152,15 @@ public class CommandProcessingService {
             Movie movie = entry.getKey();
             double similarity = entry.getValue();
             response.append(String.format(
-                    "🎬 *Название*: %s\n📖 *Описание*: %s\n🎭 *Жанры*: %s\n🤝 *Сходство*: %.2f%%\n---\n",
+                    "🎬 *Название*: %s\n" +
+                            "📖 *Описание*: %s\n" +
+                            "📜 *Релиз*: %s\n" +
+                            "🎭 *Жанры*: %s\n" +
+                            "🤝 *Сходство*: %.2f%%\n" +
+                            "---\n",
                     movie.getTitle(),
                     truncateDescription(movie.getDescription()),
+                    movie.getReleaseDate().replace("-", "."),
                     tmdbService.getGenreNames(movie.getGenreIds()),
                     similarity * 100
             ));
@@ -230,9 +243,15 @@ public class CommandProcessingService {
         if (randomMovieData != null) {
             Movie movie = saveOrUpdateMovie(randomMovieData);
             return String.format(
-                    "🎲 *Случайный фильм для вас:*\n🎬 *Название*: %s\n📝 *Описание*: %s\n🎭 *Жанры*: %s\n⭐ *Рейтинг*: %s",
+                    "🎲 *Случайный фильм для вас:*\n" +
+                            "🎬 *Название*: %s\n" +
+                            "📝 *Описание*: %s\n" +
+                            "📜 *Релиз*: %s\n" +
+                            "🎭 *Жанры*: %s\n" +
+                            "⭐ *Рейтинг*: %s",
                     movie.getTitle(),
                     truncateDescription(movie.getDescription()),
+                    movie.getReleaseDate(),
                     tmdbService.getGenreNames(movie.getGenreIds()),
                     movie.getRating() != null ? movie.getRating().toString() : "Нет рейтинга"
             );
@@ -280,7 +299,6 @@ public class CommandProcessingService {
         List<UserMovieRating> ratings = userMovieRatingRepository.findByUserId(user.getId())
                 .stream()
                 .sorted((r1, r2) -> Long.compare(r2.getId(), r1.getId()))
-                .limit(12)
                 .toList();
 
         if (ratings.isEmpty()) {
@@ -308,7 +326,7 @@ public class CommandProcessingService {
             // Обновляем существующий фильм
             Movie movie = existingMovie.get();
             movie.setTitle((String) movieData.getOrDefault("title", "Нет названия"));
-            movie.setReleaseDate((String) movieData.getOrDefault("release_date", "Не известно"));
+            movie.setReleaseDate(((String) movieData.getOrDefault("release_date", "Не известно")).replace("-", "."));
             movie.setDescription((String) movieData.getOrDefault("overview", "Нет описания"));
             movie.setRating(parseRating(movieData.get("vote_average")));
 
@@ -327,7 +345,7 @@ public class CommandProcessingService {
             Movie newMovie = new Movie();
             newMovie.setMovieId(movieId);
             newMovie.setTitle((String) movieData.getOrDefault("title", "Нет названия"));
-            newMovie.setReleaseDate((String) movieData.getOrDefault("release_date", "Не известно"));
+            newMovie.setReleaseDate(((String) movieData.getOrDefault("release_date", "Не известно")).replace("-", "."));
             newMovie.setDescription((String) movieData.getOrDefault("overview", "Нет описания"));
             newMovie.setRating(parseRating(movieData.get("vote_average")));
 
@@ -395,10 +413,16 @@ public class CommandProcessingService {
         logger.info("Лучший фильм для пользователя: {} (id: {}). Сходство: {}", bestMatch.getTitle(), bestMatch.getMovieId(), maxSimilarity);
 
         return String.format(
-                "🎥 *Самый подходящий вам фильм:*\n\n" +
-                        "🎬 *Название*: %s\n📖 *Описание*: %s\n🎭 *Жанры*: %s\n🤝 *Сходство*: %.2f%%",
+                "🎥 *Самый подходящий вам фильм:*\n" +
+                        "\n" +
+                        "🎬 *Название*: %s\n" +
+                        "📖 *Описание*: %s\n" +
+                        "📜 *Релиз*: %s\n" +
+                        "🎭 *Жанры*: %s\n" +
+                        "🤝 *Сходство*: %.2f%%",
                 bestMatch.getTitle(),
                 truncateDescription(bestMatch.getDescription()),
+                bestMatch.getReleaseDate().replace("-", "."),
                 tmdbService.getGenreNames(bestMatch.getGenreIds()),
                 maxSimilarity * 100
         );
@@ -420,9 +444,14 @@ public class CommandProcessingService {
             return movies.stream()
                     .limit(5) // Ограничиваем до 5 фильмов
                     .map(movie -> String.format(
-                            "🎬 *Название*: %s\n📖 *Описание*: %s\n🎭 *Жанры*: %s\n⭐ *Рейтинг*: %s\n",
+                            "🎬 *Название*: %s\n" +
+                                    "📖 *Описание*: %s\n" +
+                                    "📜 *Релиз*: %s\n" +
+                                    "🎭 *Жанры*: %s\n" +
+                                    "⭐ *Рейтинг*: %s\n",
                             movie.get("title"),
                             truncateDescription((String) movie.getOrDefault("overview", "Нет описания")),
+                            ((String) movie.getOrDefault("release_date", "Не известно")).replace("-", "."),
                             tmdbService.getGenreNames(getGenreIdsFromMovieData(movie)), // Жанры
                             movie.getOrDefault("vote_average", "Нет рейтинга")
                     ))
