@@ -67,7 +67,7 @@ public class CommandProcessingService {
                             
                             """,
                             movietoString(movie),
-                            similarity != 0 ? String.valueOf(similarity * 100).substring(0, 4) + "%": "Не известно")
+                            similarity != 0 ? String.valueOf((100 + similarity * 100) / 2).substring(0, 4) + "%": "Не известно")
 
                     );
                 } catch (Exception e) {
@@ -181,7 +181,7 @@ public class CommandProcessingService {
                             
                             """,
                     movietoString(movie),
-                    similarity != 0 ? String.valueOf(similarity * 100).substring(0, 4) + "%" : "Не известно"
+                    similarity != 0 ? String.valueOf((100 + similarity * 100) / 2).substring(0, 4) + "%" : "Не известно"
             ));
         }
 
@@ -199,7 +199,6 @@ public class CommandProcessingService {
 
     public Map<String, Double> getUserGenres(Usr user) {
         List<UserMovieRating> ratings = userMovieRatingRepository.findByUserId(user.getId());
-
         Map<String, Double> genreWeights = new HashMap<>();
 
         for (UserMovieRating rating : ratings) {
@@ -207,10 +206,9 @@ public class CommandProcessingService {
             String[] genres = rating.getMovie().getGenreIds().split("_");
 
             for (String genre : genres) {
-                genreWeights.put(genre, genreWeights.getOrDefault(genre, 0.0) + userRating);
+                genreWeights.put(genre, genreWeights.getOrDefault(genre, 0.0) + (userRating - 5));
             }
         }
-
         return genreWeights;
     }
 
@@ -403,7 +401,7 @@ public class CommandProcessingService {
                         %s
                         🤝 *Сходство:* %s""",
                 movietoString(bestMatch),
-                maxSimilarity != 0 ? String.valueOf(maxSimilarity * 100).substring(0, 4) + "%" : "Не известно"
+                maxSimilarity != 0 ? String.valueOf((100 + maxSimilarity * 100) / 2).substring(0, 4) + "%" : "Не известно"
         );
     }
 

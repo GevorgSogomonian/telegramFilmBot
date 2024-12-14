@@ -163,7 +163,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                         
                         """,
                 commandProcessingService.movietoString(randomMovie),
-                similarity != 0 ? String.valueOf(similarity * 100).substring(0, 4) + "%" : "Не известно"
+                similarity != 0 ? String.valueOf((100 + similarity * 100) / 2).substring(0, 4) + "%" : "Не известно"
         );
 
         SendMessage message = new SendMessage();
@@ -373,7 +373,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                             
                             """,
                     commandProcessingService.movietoString(randomMovie),
-                    similarity != 0 ? String.valueOf(similarity * 100).substring(0, 4) + "%": "Не известно"
+                    similarity != 0 ? String.valueOf((100 + similarity * 100) / 2).substring(0, 4) + "%": "Не известно"
             );
 
             SendMessage message = new SendMessage();
