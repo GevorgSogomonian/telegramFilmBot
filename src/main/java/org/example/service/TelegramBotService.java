@@ -53,7 +53,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
         System.out.println("Token: " + botToken);
 
         commandHandlers.put("🔍 Поиск", this::handleSearchCommand);
-        commandHandlers.put("🌀 Рандомный фильм", this::handleRateAllCommand);
+        commandHandlers.put("🌀 Случайный фильм", this::handleRateAllCommand);
         commandHandlers.put("🎬 Популярные фильмы", this::handleRatePopularCommand);
         commandHandlers.put("🏆 Лучшее совпадение", this::handleMostPersonalCommand);
         commandHandlers.put("❤️ Рекомендации", this::handlePersonalCommand);
@@ -239,7 +239,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                     
                     Попробуйте эти команды:
                     🎬 *Популярные фильмы*
-                    🌀 *Рандомный фильм*""");
+                    🌀 *Случайный фильм*""");
             return;
         }
 
@@ -281,7 +281,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                     
                     Попробуйте эти команды:
                     🎬 *Популярные фильмы*
-                    🌀 *Рандомный фильм*""");
+                    🌀 *Случайный фильм*""");
             return;
         }
 
@@ -437,10 +437,10 @@ public class TelegramBotService extends TelegramLongPollingBot {
         row3.add(new KeyboardButton("🏆 Лучшее совпадение"));
 
         KeyboardRow row4 = new KeyboardRow();
-        row4.add(new KeyboardButton("🎬 Популярные фильмы"));
+        row4.add(new KeyboardButton("🌀 Случайный фильм"));
 
         KeyboardRow row5 = new KeyboardRow();
-        row5.add(new KeyboardButton("🌀 Рандомный фильм"));
+        row5.add(new KeyboardButton("🎬 Популярные фильмы"));
 
         keyboardRows.add(row2);
         keyboardRows.add(row3);

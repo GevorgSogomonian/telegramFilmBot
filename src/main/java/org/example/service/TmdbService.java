@@ -1,6 +1,7 @@
 package org.example.service;
 
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -8,7 +9,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class TmdbService {
     @Value("${spring.tmdb.api.key}")
     private String apiKey;
@@ -25,18 +26,12 @@ public class TmdbService {
     @Value("${spring.tmdb.api.url}")
     private String apiUrl;
 
-    private final RestTemplate restTemplate;
+    private final RestTemplate restTemplate = new RestTemplate();
     private final Map<Integer, String> genresCache = new HashMap<>();
-    private final List<Map<String, Object>> popularMoviesCache = new ArrayList<>();
-
-    public TmdbService() {
-        this.restTemplate = new RestTemplate();
-    }
 
     public Map<String, Object> getPopularMovies(Integer page) {
-//        String url1 = String.format("%s/movie/popular?api_key=%s&language=ru&page=%s", apiUrl, apiKey, page.toString());
-//        String url = String.format("%s/trending/all/week?api_key=%s&language=ru", apiUrl, apiKey);
-        String url1 = String.format("%s/movie/top_rated?api_key=%s&language=ru&page=%s", apiUrl, apiKey, page.toString());
+        String url1 = String.format("%s/movie/popular?api_key=%s&language=ru&page=%s", apiUrl, apiKey, page.toString()); //вариант запроса для получения популярных фильмов
+//        String url1 = String.format("%s/movie/top_rated?api_key=%s&language=ru&page=%s", apiUrl, apiKey, page.toString());
 
         return restTemplate.getForObject(url1, Map.class);
     }
@@ -61,7 +56,7 @@ public class TmdbService {
     }
 
     public Map<String, Object> getRandomMovieFromAll() {
-        int randomPage = new Random().nextInt(500) + 1;
+        int randomPage = new Random().nextInt(300) + 1;
         Map<String, Object> response = fetchMoviesFromAllPages(randomPage);
 
         if (response != null && response.containsKey("results")) {
@@ -75,8 +70,8 @@ public class TmdbService {
         return null;
     }
 
-    private Map<String, Object> fetchMoviesFromAllPages(int page) {
-        String url = String.format("https://api.themoviedb.org/3/discover/movie?api_key=%s&page=%d&language=ru", apiKey, page);
+    public Map<String, Object> fetchMoviesFromAllPages(int page) {
+        String url = String.format("%s/movie/top_rated?api_key=%s&language=ru&page=%s", apiUrl, apiKey, page);
         return performApiRequest(url);
     }
 
@@ -120,7 +115,18 @@ public class TmdbService {
     }
 
     public Map<String, Object> getRandomPopularMovie() {
-        return popularMoviesCache.get(new Random().nextInt(popularMoviesCache.size()));
+        int randomPage = new Random().nextInt(30) + 1;
+        Map<String, Object> response = getPopularMovies(randomPage);
+
+        if (response != null && response.containsKey("results")) {
+            List<Map<String, Object>> movies = (List<Map<String, Object>>) response.get("results");
+
+            if (!movies.isEmpty()) {
+                return movies.get(new Random().nextInt(movies.size()));
+            }
+        }
+
+        return null;
     }
 
     @Scheduled(cron = "0 0 0 * * *")
@@ -145,22 +151,9 @@ public class TmdbService {
         }
     }
 
-    @Scheduled(cron = "0 0 0 * * *")
-    public void cachePopularMovies() {
-        for (int i = 1; i <= 10; i++) {
-            Map<String, Object> response = getPopularMovies(i);
-
-            if (response != null && response.containsKey("results")) {
-                popularMoviesCache.addAll((List<Map<String, Object>>) response.get("results"));
-            }
-        }
-    }
-
     @PostConstruct
     public void init() {
         fetchAndCacheGenres();
         log.info("Жанры успешно загружены и закэшированы: {}", genresCache);
-        cachePopularMovies();
-        log.info("Популярные фильмы успешно загружены и закэшированы: {}", popularMoviesCache);
     }
 }

@@ -3,6 +3,7 @@ package org.example.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.example.entity.Movie;
 import org.example.entity.UserMovieRating;
@@ -12,6 +13,7 @@ import org.example.repository.UserMovieRatingRepository;
 import org.example.repository.UsrRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -95,7 +97,7 @@ public class CommandProcessingService {
         );
     }
 
-    private Double parseRating(Object ratingObj) {
+    public static Double parseRating(Object ratingObj) {
         if (ratingObj == null) {
             return 0.0;
         }
@@ -126,12 +128,10 @@ public class CommandProcessingService {
                     🎬 *Оцените несколько фильмов, используя команды*:
                     Попробуйте эти команды:
                     🎬 *Популярные фильмы*
-                    🌀 *Рандомный фильм*""";
+                    🌀 *Случайный фильм*""";
         }
 
-        List<Movie> allMovies = movieRepository.findAll();
-        Collections.shuffle(allMovies);
-        List<Movie> movies = allMovies.stream().limit(10).toList();
+        List<Movie> movies = movieRepository.findRandomMovies(30);
 
         if (movies.isEmpty()) {
             logger.warn("В базе данных отсутствуют фильмы для анализа.");
@@ -139,7 +139,7 @@ public class CommandProcessingService {
                     😞 *К сожалению, у нас пока нет фильмов для анализа.* Попробуйте позже!""";
         }
 
-        logger.info("Найдено {} фильмов в базе. Отобрано {} фильмов для анализа.", allMovies.size(), movies.size());
+        logger.info("Отобрано {} фильмов для анализа.", movies.size());
 
         Map<Movie, Double> similarityMap = new HashMap<>();
         for (Movie movie : movies) {
@@ -167,7 +167,7 @@ public class CommandProcessingService {
                     
                     Попробуйте эти команды:
                     🎬 *Популярные фильмы*
-                    🌀 *Рандомный фильм*""";
+                    🌀 *Случайный фильм*""";
         }
 
         StringBuilder response = new StringBuilder();
@@ -315,7 +315,7 @@ public class CommandProcessingService {
                     
                     Попробуйте эти команды:
                     🎬 *Популярные фильмы*
-                    🌀 *Рандомный фильм*""";
+                    🌀 *Случайный фильм*""";
         }
 
         return ratings.stream()
@@ -336,40 +336,12 @@ public class CommandProcessingService {
         Long movieId = Long.valueOf(movieData.getOrDefault("id", 0).toString());
         Optional<Movie> existingMovie = movieRepository.findByMovieId(movieId);
 
-        if (existingMovie.isPresent()) {
-            Movie movie = existingMovie.get();
-            movie.setTitle((String) movieData.getOrDefault("title", "Нет названия"));
-            movie.setReleaseDate(((String) movieData.getOrDefault("release_date", "Не известно")).replace("-", "."));
-            movie.setDescription((String) movieData.getOrDefault("overview", "Нет описания"));
-            movie.setRating(parseRating(movieData.get("vote_average")));
-
-            StringBuilder genreBuilder = new StringBuilder();
-            ((List<Integer>) movieData.getOrDefault("genre_ids", Collections.emptyList()))
-                    .forEach(genreId -> genreBuilder.append(genreId).append("_"));
-            if (genreBuilder.length() > 0) {
-                genreBuilder.deleteCharAt(genreBuilder.length() - 1);
-            }
-            movie.setGenreIds(genreBuilder.toString());
-
-            return movieRepository.save(movie);
-        } else {
-            Movie newMovie = new Movie();
-            newMovie.setMovieId(movieId);
-            newMovie.setTitle((String) movieData.getOrDefault("title", "Нет названия"));
-            newMovie.setReleaseDate(((String) movieData.getOrDefault("release_date", "Не известно")).replace("-", "."));
-            newMovie.setDescription((String) movieData.getOrDefault("overview", "Нет описания"));
-            newMovie.setRating(parseRating(movieData.get("vote_average")));
-
-            StringBuilder genreBuilder = new StringBuilder();
-            ((List<Integer>) movieData.getOrDefault("genre_ids", Collections.emptyList()))
-                    .forEach(genreId -> genreBuilder.append(genreId).append("_"));
-            if (genreBuilder.length() > 0) {
-                genreBuilder.deleteCharAt(genreBuilder.length() - 1);
-            }
-            newMovie.setGenreIds(genreBuilder.toString());
+        if (existingMovie.isEmpty()) {
+            Movie newMovie = mapToMovie(movieData);
 
             return movieRepository.save(newMovie);
         }
+        return existingMovie.get();
     }
 
     public String getMostPersonalRecommendation(String chatId) {
@@ -392,7 +364,7 @@ public class CommandProcessingService {
                     🎬 *Оцените несколько фильмов*:
                     Попробуйте эти команды:
                     🎬 *Популярные фильмы*
-                    🌀 *Рандомный фильм*""";
+                    🌀 *Случайный фильм*""";
         }
 
         List<Movie> allMovies = movieRepository.findAll();
@@ -434,4 +406,42 @@ public class CommandProcessingService {
                 maxSimilarity != 0 ? String.valueOf(maxSimilarity * 100).substring(0, 4) + "%" : "Не известно"
         );
     }
+
+    public static Movie mapToMovie(Map<String, Object> movieData) {
+        Long movieId = Long.valueOf(movieData.getOrDefault("id", 0).toString());
+
+        Movie newMovie = new Movie();
+        newMovie.setMovieId(movieId);
+        newMovie.setTitle((String) movieData.getOrDefault("title", "Нет названия"));
+        newMovie.setReleaseDate(((String) movieData.getOrDefault("release_date", "Не известно")).replace("-", "."));
+        newMovie.setDescription((String) movieData.getOrDefault("overview", "Нет описания"));
+        newMovie.setRating(parseRating(movieData.get("vote_average")));
+
+        StringBuilder genreBuilder = new StringBuilder();
+        ((List<Integer>) movieData.getOrDefault("genre_ids", Collections.emptyList()))
+                .forEach(genreId -> genreBuilder.append(genreId).append("_"));
+        if (genreBuilder.length() > 0) {
+            genreBuilder.deleteCharAt(genreBuilder.length() - 1);
+        }
+        newMovie.setGenreIds(genreBuilder.toString());
+
+        return newMovie;
+    }
+
+    @Scheduled(cron = "0 0 0 * * *")
+    public void cachePopularMovies() {
+        for (int i = 1; i <= 30; i++) {
+            Map<String, Object> response = tmdbService.fetchMoviesFromAllPages(i);
+
+            if (response != null && response.containsKey("results")) {
+                ((List<Map<String, Object>>) response.get("results")).forEach(this::saveOrUpdateMovie);
+            }
+        }
+    }
+
+//    @PostConstruct
+//    public void init() {
+//        cachePopularMovies();
+//        logger.info("Популярные фильмы успешно загружены");
+//    }
 }
