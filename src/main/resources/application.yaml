@@ -1,11 +1,18 @@
 spring:
+
   datasource:
-    url: jdbc:postgresql://localhost:5432/postgres
+    url: jdbc:mysql://localhost:3308/film_database
     username: new_user
     password: secure_password
+
   jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
     hibernate:
       ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
 
   telegram:
     bot:
@@ -17,3 +24,21 @@ spring:
     api:
       key: ddf19a5f2004db98f54986499f0b1607
       url: https://api.themoviedb.org/3
+---
+spring:
+
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:mysql://mysql:3306/film_database
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+  telegram:
+    bot:
+      username: filmBotTest_bot
+      token: 7595573235:AAFszszFK9JPFLGuXZRoj3e1bhUiwGRmXaQ

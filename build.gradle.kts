@@ -14,15 +14,16 @@ repositories {
 }
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-actuator")
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
+//    implementation("org.springframework.boot:spring-boot-starter-actuator")
     // Spring Boot
+    implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-configuration-processor")
 
     // Database
-    runtimeOnly("org.postgresql:postgresql")
+    implementation("mysql:mysql-connector-java:8.0.33")
+//    runtimeOnly("org.postgresql:postgresql")
 
     // Telegram Bot API
     implementation("org.telegram:telegrambots-spring-boot-starter:6.5.0")
@@ -31,18 +32,10 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
 
     // Apache Mahout (для рекомендаций)
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("org.apache.commons:commons-math3:3.6.1")
 
     implementation("org.projectlombok:lombok:1.18.26")
     annotationProcessor("org.projectlombok:lombok:1.18.26")
-
-    // Test dependencies
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-
-    implementation("org.springframework.boot:spring-boot-starter")
-    implementation("org.springframework.boot:spring-boot-configuration-processor")
 
     implementation("org.slf4j:slf4j-api:2.0.9")
     implementation("ch.qos.logback:logback-classic:1.4.11")
