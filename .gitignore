@@ -40,3 +40,7 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Config ###
+src/main/resources
+dev_docker_config/

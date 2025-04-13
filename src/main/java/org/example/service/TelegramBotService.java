@@ -162,7 +162,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                         🤝 *Сходство:* %s
                         
                         """,
-                commandProcessingService.movietoString(randomMovie),
+                commandProcessingService.movieToString(randomMovie),
                 similarity != 0 ? String.valueOf((100 + similarity * 100) / 2).substring(0, 4) + "%" : "Не известно"
         );
 
@@ -372,7 +372,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                             🤝 *Сходство:* %s
                             
                             """,
-                    commandProcessingService.movietoString(randomMovie),
+                    commandProcessingService.movieToString(randomMovie),
                     similarity != 0 ? String.valueOf((100 + similarity * 100) / 2).substring(0, 4) + "%": "Не известно"
             );
 

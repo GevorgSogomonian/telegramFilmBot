@@ -3,7 +3,6 @@ package org.example.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.example.entity.Movie;
 import org.example.entity.UserMovieRating;
@@ -66,7 +65,7 @@ public class CommandProcessingService {
                             🤝 *Сходство:* %s
                             
                             """,
-                            movietoString(movie),
+                            movieToString(movie),
                             similarity != 0 ? String.valueOf((100 + similarity * 100) / 2).substring(0, 4) + "%": "Не известно")
 
                     );
@@ -81,7 +80,7 @@ public class CommandProcessingService {
         return "Фильмы не найдены.";
     }
 
-    public String movietoString(Movie movie) {
+    public String movieToString(Movie movie) {
         return String.format(
                 """
                         🎬 *Название:* %s
@@ -180,7 +179,7 @@ public class CommandProcessingService {
                             🤝 *Сходство:* %s
                             
                             """,
-                    movietoString(movie),
+                    movieToString(movie),
                     similarity != 0 ? String.valueOf((100 + similarity * 100) / 2).substring(0, 4) + "%" : "Не известно"
             ));
         }
@@ -400,7 +399,7 @@ public class CommandProcessingService {
                 """
                         %s
                         🤝 *Сходство:* %s""",
-                movietoString(bestMatch),
+                movieToString(bestMatch),
                 maxSimilarity != 0 ? String.valueOf((100 + maxSimilarity * 100) / 2).substring(0, 4) + "%" : "Не известно"
         );
     }
@@ -436,10 +435,4 @@ public class CommandProcessingService {
             }
         }
     }
-
-//    @PostConstruct
-//    public void init() {
-//        cachePopularMovies();
-//        logger.info("Популярные фильмы успешно загружены");
-//    }
 }
